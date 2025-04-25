@@ -1740,4 +1740,5 @@ if __name__ == '__main__':
         db.create_all()
         create_admin()
         init_scheduler()  # Ініціалізуємо планувальник задач
-    app.run(debug=True) 
+    # app.run(host='krainamriy.fun', port=80, debug=True)  # Для продакшену
+    app.run(debug=True)  # Для розробки
