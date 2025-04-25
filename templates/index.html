@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Ласкаво просимо до системи інвентаризації</h1>
+    <p class="lead">Ця система допоможе вам керувати інвентарем техніки та пристроїв.</p>
+    <hr class="my-4">
+    
+    {% if current_user.is_authenticated %}
+    <p>Ви можете додавати нові пристрої, переглядати існуючі та керувати їх статусом.</p>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary btn-lg" href="{{ url_for('devices') }}" role="button">Переглянути пристрої</a>
+        <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
+            <i class="bi bi-book-half"></i> Документація
+        </a>
+    </div>
+    {% else %}
+    <p>Будь ласка, увійдіть до системи для отримання доступу до функцій інвентаризації.</p>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary btn-lg" href="{{ url_for('login') }}" role="button">Увійти до системи</a>
+        <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
+            <i class="bi bi-book-half"></i> Документація
+        </a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="mt-4 p-4 bg-light rounded shadow-sm">
+    <div class="d-flex align-items-center">
+        <i class="bi bi-info-circle text-primary fs-1 me-3"></i>
+        <div>
+            <h3>Нова документація доступна!</h3>
+            <p>Ми додали розділ Вікі з детальними інструкціями щодо використання системи інвентаризації. Дізнайтеся про всі можливості системи!</p>
+            <a href="{{ url_for('wiki') }}" class="btn btn-sm btn-primary">Перейти до Вікі</a>
+        </div>
+    </div>
+</div>
+{% endblock %} 

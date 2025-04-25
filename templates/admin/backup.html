@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Резервне копіювання та відновлення</h1>
+    
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="card-title mb-0">Створення резервної копії</h5>
+                </div>
+                <div class="card-body">
+                    <p>Створіть резервну копію бази даних для збереження всіх даних системи.</p>
+                    <p><strong>Резервна копія включає:</strong></p>
+                    <ul>
+                        <li>Дані пристроїв та їх фото</li>
+                        <li>Інформацію про користувачів</li>
+                        <li>Налаштування міст</li>
+                        <li>Історію змін та журнал активності</li>
+                    </ul>
+                    <form action="{{ url_for('admin_create_backup') }}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-download"></i> Створити резервну копію
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">Налаштування автоматичного резервування</h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('admin_backup_settings') }}" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="enableAutoBackup" name="enable_auto_backup" {% if backup_settings.enable_auto_backup %}checked{% endif %}>
+                                <label class="form-check-label" for="enableAutoBackup">Увімкнути автоматичне резервне копіювання</label>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="backupInterval" class="form-label">Інтервал резервного копіювання</label>
+                            <select class="form-select" id="backupInterval" name="backup_interval">
+                                <option value="daily" {% if backup_settings.backup_interval == 'daily' %}selected{% endif %}>Щодня</option>
+                                <option value="weekly" {% if backup_settings.backup_interval == 'weekly' %}selected{% endif %}>Щотижня</option>
+                                <option value="monthly" {% if backup_settings.backup_interval == 'monthly' %}selected{% endif %}>Щомісяця</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="retentionPeriod" class="form-label">Зберігати резервні копії</label>
+                            <select class="form-select" id="retentionPeriod" name="retention_period">
+                                <option value="7" {% if backup_settings.retention_period == 7 %}selected{% endif %}>7 днів</option>
+                                <option value="30" {% if backup_settings.retention_period == 30 %}selected{% endif %}>30 днів</option>
+                                <option value="90" {% if backup_settings.retention_period == 90 %}selected{% endif %}>90 днів</option>
+                                <option value="365" {% if backup_settings.retention_period == 365 %}selected{% endif %}>1 рік</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-save"></i> Зберегти налаштування
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-info text-white">
+                    <h5 class="card-title mb-0">Доступні резервні копії</h5>
+                </div>
+                <div class="card-body">
+                    {% if backups %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Назва файлу</th>
+                                    <th>Дата створення</th>
+                                    <th>Розмір</th>
+                                    <th>Тип</th>
+                                    <th>Дії</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for backup in backups %}
+                                <tr>
+                                    <td>{{ backup.filename }}</td>
+                                    <td>{{ backup.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                                    <td>{{ backup.size }}</td>
+                                    <td>{% if backup.is_auto %}Автоматична{% else %}Ручна{% endif %}</td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('admin_download_backup', backup_id=backup.id) }}" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-download"></i> Завантажити
+                                            </a>
+                                            <a href="{{ url_for('admin_restore_backup', backup_id=backup.id) }}" 
+                                               class="btn btn-sm btn-warning" 
+                                               onclick="return confirm('Ви впевнені? Поточні дані будуть замінені даними з резервної копії. Ця дія незворотна!');">
+                                                <i class="bi bi-arrow-counterclockwise"></i> Відновити
+                                            </a>
+                                            <a href="{{ url_for('admin_delete_backup', backup_id=backup.id) }}" 
+                                               class="btn btn-sm btn-danger" 
+                                               onclick="return confirm('Ви дійсно хочете видалити цю резервну копію?');">
+                                                <i class="bi bi-trash"></i> Видалити
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Резервних копій ще не створено.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">Відновлення з файлу</h5>
+                </div>
+                <div class="card-body">
+                    <p>Відновлення системи з раніше створеної резервної копії.</p>
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i> <strong>Увага!</strong> Відновлення системи призведе до заміни всіх поточних даних. Цю дію неможливо скасувати.
+                    </div>
+                    <form action="{{ url_for('admin_restore_from_file') }}" method="post" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label for="backupFile" class="form-label">Виберіть файл резервної копії</label>
+                            <input class="form-control" type="file" id="backupFile" name="backup_file" accept=".db, .sqlite, .zip">
+                        </div>
+                        <button type="submit" class="btn btn-warning" onclick="return confirm('Ви впевнені? Поточні дані будуть повністю замінені. Ця дія незворотна!');">
+                            <i class="bi bi-arrow-counterclockwise"></i> Відновити систему
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="card-title mb-0">Експорт/імпорт налаштувань</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-4">
+                        <h6>Експорт налаштувань</h6>
+                        <p>Завантажте поточні налаштування системи в JSON-файл.</p>
+                        <a href="{{ url_for('admin_export_settings') }}" class="btn btn-secondary">
+                            <i class="bi bi-box-arrow-right"></i> Експортувати налаштування
+                        </a>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div>
+                        <h6>Імпорт налаштувань</h6>
+                        <p>Завантажте раніше експортовані налаштування.</p>
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Імпорт налаштувань зачепить тільки системні параметри, а не дані користувачів чи пристроїв.
+                        </div>
+                        <form action="{{ url_for('admin_import_settings') }}" method="post" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <div class="mb-3">
+                                <label for="settingsFile" class="form-label">Виберіть файл налаштувань</label>
+                                <input class="form-control" type="file" id="settingsFile" name="settings_file" accept=".json">
+                            </div>
+                            <button type="submit" class="btn btn-secondary">
+                                <i class="bi bi-box-arrow-in-left"></i> Імпортувати налаштування
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h2>Імпорт пристроїв з Excel</h2>
+        <p class="text-muted">Завантажте Excel-файл із даними про пристрої для масового імпорту.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Завантаження файлу</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="excel_file" class="form-label">Виберіть Excel-файл</label>
+                        <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx, .xls" required>
+                        <div class="form-text">Підтримуються формати .xlsx та .xls</div>
+                    </div>
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Імпортувати</button>
+                        <a href="{{ url_for('download_import_template') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-download me-2"></i>Завантажити шаблон
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Інструкції з імпорту</h5>
+            </div>
+            <div class="card-body">
+                <h6>Формат файлу</h6>
+                <p>Excel-файл повинен містити наступні стовпці:</p>
+                <ul>
+                    <li><strong>Назва</strong> - назва пристрою</li>
+                    <li><strong>Тип</strong> - тип пристрою (ноутбук, принтер, тощо)</li>
+                    <li><strong>Серійний номер</strong> - унікальний серійний номер</li>
+                    <li><strong>Розташування</strong> - місце розташування пристрою</li>
+                    <li><strong>Статус</strong> - статус пристрою (В експлуатації, На ремонті, тощо)</li>
+                    <li><strong>Місто</strong> - місто, де знаходиться пристрій</li>
+                    <li><strong>Примітки</strong> - додаткова інформація (необов'язково)</li>
+                </ul>
+                
+                <h6>Важливі моменти</h6>
+                <ul>
+                    <li>Перший рядок файлу повинен містити заголовки стовпців</li>
+                    <li>Серійні номери повинні бути унікальними</li>
+                    <li>Інвентарні номери будуть згенеровані автоматично</li>
+                    <li>Якщо вказане місто не існує, воно буде створено автоматично</li>
+                </ul>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>Для зручності завантажте готовий шаблон з правильними заголовками.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ url_for('devices') }}" class="btn btn-secondary">Повернутися до списку пристроїв</a>
+</div>
+{% endblock %} 

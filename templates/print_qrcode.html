@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Друк QR-коду - {{ device.inventory_number }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-container {
+                width: 100%;
+                page-break-inside: avoid;
+            }
+            .qr-card {
+                border: 1px solid #000;
+                margin: 5mm;
+                padding: 5mm;
+                max-width: 60mm;
+                text-align: center;
+            }
+            .qr-code-img {
+                max-width: 50mm;
+                max-height: 50mm;
+            }
+            .inv-number {
+                font-size: 14pt;
+                font-weight: bold;
+                margin-top: 3mm;
+            }
+            .device-info {
+                font-size: 10pt;
+                margin-top: 2mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-4 no-print">
+        <div class="row">
+            <div class="col-md-12">
+                <h2>Друк QR-коду пристрою</h2>
+                <div class="alert alert-info">
+                    <p>Натисніть кнопку "Друкувати", щоб роздрукувати QR-код.</p>
+                    <p>Рекомендується використовувати наклейки або спеціальний папір для друку.</p>
+                </div>
+                <button class="btn btn-primary" onclick="window.print();">Друкувати</button>
+                <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-secondary">Повернутися до деталей</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="print-container">
+        <div class="qr-card">
+            <img src="{{ url_for('device_qrcode', device_id=device.id) }}" class="qr-code-img" alt="QR-код">
+            <div class="inv-number">{{ device.inventory_number }}</div>
+            <div class="device-info">{{ device.name }}</div>
+            <div class="device-info">{{ device.type }}</div>
+        </div>
+    </div>
+</body>
+</html> 

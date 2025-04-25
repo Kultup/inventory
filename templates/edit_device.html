@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2>Редагувати пристрій</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-secondary">Скасувати</a>
+    </div>
+</div>
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <label for="name" class="form-label">Назва</label>
+        <input type="text" class="form-control" id="name" name="name" value="{{ device.name }}" required>
+    </div>
+    
+    <div class="mb-3">
+        <label for="type" class="form-label">Тип пристрою</label>
+        <select class="form-select" id="type" name="type" required>
+            <option value="">Виберіть тип</option>
+            <option value="Комп'ютер" {% if device.type == 'Комп\'ютер' %}selected{% endif %}>Комп'ютер</option>
+            <option value="Ноутбук" {% if device.type == 'Ноутбук' %}selected{% endif %}>Ноутбук</option>
+            <option value="Принтер" {% if device.type == 'Принтер' %}selected{% endif %}>Принтер</option>
+            <option value="Мережеве обладнання" {% if device.type == 'Мережеве обладнання' %}selected{% endif %}>Мережеве обладнання</option>
+            <option value="Інше" {% if device.type == 'Інше' %}selected{% endif %}>Інше</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="serial_number" class="form-label">Серійний номер</label>
+        <input type="text" class="form-control" id="serial_number" name="serial_number" value="{{ device.serial_number }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="inventory_number" class="form-label">Інвентарний номер</label>
+        <input type="text" class="form-control" id="inventory_number" value="{{ device.inventory_number }}" readonly>
+        <div class="form-text">Інвентарний номер не можна змінити.</div>
+    </div>
+
+    {% if current_user.is_admin and cities|length > 1 %}
+    <div class="mb-3">
+        <label for="city_id" class="form-label">Місто</label>
+        <select class="form-select" id="city_id" name="city_id" required>
+            {% for city in cities %}
+            <option value="{{ city.id }}" {% if city.id == device.city_id %}selected{% endif %}>{{ city.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+
+    <div class="mb-3">
+        <label for="location" class="form-label">Розташування</label>
+        <input type="text" class="form-control" id="location" name="location" value="{{ device.location }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="status" class="form-label">Статус</label>
+        <select class="form-select" id="status" name="status" required>
+            <option value="">Виберіть статус</option>
+            <option value="В експлуатації" {% if device.status == 'В експлуатації' %}selected{% endif %}>В експлуатації</option>
+            <option value="На ремонті" {% if device.status == 'На ремонті' %}selected{% endif %}>На ремонті</option>
+            <option value="Резерв" {% if device.status == 'Резерв' %}selected{% endif %}>Резерв</option>
+            <option value="Списано" {% if device.status == 'Списано' %}selected{% endif %}>Списано</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="notes" class="form-label">Примітки</label>
+        <textarea class="form-control" id="notes" name="notes" rows="3">{{ device.notes }}</textarea>
+    </div>
+
+    <div class="mb-3">
+        <label for="last_maintenance" class="form-label">Дата останнього обслуговування</label>
+        <input type="date" class="form-control" id="last_maintenance" name="last_maintenance" value="{{ device.last_maintenance.strftime('%Y-%m-%d') if device.last_maintenance else '' }}">
+        <div class="form-text">Залиште порожнім, якщо не було обслуговування.</div>
+    </div>
+
+    <div class="mb-3">
+        <label for="maintenance_interval" class="form-label">Інтервал обслуговування (днів)</label>
+        <input type="number" class="form-control" id="maintenance_interval" name="maintenance_interval" value="{{ device.maintenance_interval or 365 }}" min="1">
+        <div class="form-text">Кількість днів до наступного планового обслуговування.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+</form>
+{% endblock %} 

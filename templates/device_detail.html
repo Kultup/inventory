@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2>Деталі пристрою</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-info me-2">Редагувати</a>
+        <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити цей пристрій? Всі пов\'язані дані та фотографії також будуть видалені.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-danger me-2">Видалити</button>
+        </form>
+        <a href="{{ url_for('devices') }}" class="btn btn-secondary">Назад до списку</a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Основна інформація
+            </div>
+            <div class="card-body">
+                <table class="table table-borderless">
+                    <tr>
+                        <th style="width: 40%">Назва:</th>
+                        <td>{{ device.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Інвентарний номер:</th>
+                        <td>
+                            <strong class="text-primary">{{ device.inventory_number }}</strong>
+                            <a href="{{ url_for('print_inventory', device_id=device.id) }}" class="btn btn-sm btn-outline-primary ms-2" title="Друкувати інвентарний номер">
+                                <i class="bi bi-printer"></i> Друкувати
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Тип пристрою:</th>
+                        <td>{{ device.type }}</td>
+                    </tr>
+                    <tr>
+                        <th>Серійний номер:</th>
+                        <td>{{ device.serial_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>Місто:</th>
+                        <td>{{ device.city.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>Розташування:</th>
+                        <td>{{ device.location }}</td>
+                    </tr>
+                    <tr>
+                        <th>Статус:</th>
+                        <td>
+                            {% if device.status == 'В експлуатації' %}
+                                <span class="badge bg-success">{{ device.status }}</span>
+                            {% elif device.status == 'На ремонті' %}
+                                <span class="badge bg-warning">{{ device.status }}</span>
+                            {% elif device.status == 'Резерв' %}
+                                <span class="badge bg-info">{{ device.status }}</span>
+                            {% elif device.status == 'Списано' %}
+                                <span class="badge bg-danger">{{ device.status }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ device.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Останнє обслуговування:</th>
+                        <td>{{ device.last_maintenance.strftime('%d.%m.%Y') if device.last_maintenance else 'Не вказано' }}</td>
+                    </tr>
+                    <tr>
+                        <th>Інтервал обслуговування:</th>
+                        <td>{{ device.maintenance_interval }} днів</td>
+                    </tr>
+                    <tr>
+                        <th>Наступне обслуговування:</th>
+                        <td>
+                            {% if device.next_maintenance %}
+                                {% set days_left = (device.next_maintenance - now).days %}
+                                {{ device.next_maintenance.strftime('%d.%m.%Y') }} 
+                                {% if days_left < 0 %}
+                                    <span class="badge bg-danger">Прострочено ({{ abs(days_left) }} днів)</span>
+                                {% elif days_left <= 30 %}
+                                    <span class="badge bg-warning">Скоро ({{ days_left }} днів)</span>
+                                {% else %}
+                                    <span class="badge bg-success">{{ days_left }} днів</span>
+                                {% endif %}
+                            {% else %}
+                                {% if device.last_maintenance %}
+                                    Не визначено (не вказано інтервал)
+                                {% else %}
+                                    Не визначено (не вказано дату обслуговування)
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Дата додавання:</th>
+                        <td>{{ device.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Примітки
+            </div>
+            <div class="card-body">
+                {% if device.notes %}
+                <p>{{ device.notes|nl2br }}</p>
+                {% else %}
+                <p class="text-muted">Примітки відсутні</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Фотографії пристрою</span>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addPhotoModal">
+            Додати фото
+        </button>
+    </div>
+    <div class="card-body">
+        {% if device.photos %}
+        <div class="row">
+            {% for photo in device.photos %}
+            <div class="col-md-3 mb-3">
+                <div class="card">
+                    <a href="{{ url_for('uploaded_file', filename=photo.filename) }}" target="_blank" title="Відкрити повне зображення">
+                        <img src="{{ url_for('uploaded_file', filename=photo.filename) }}" class="card-img-top" alt="Фото пристрою" style="height: 150px; object-fit: cover;">
+                    </a>
+                    <div class="card-body p-2">
+                        <p class="card-text small">{{ photo.original_filename }}</p>
+                        <form method="POST" action="{{ url_for('delete_device_photo', photo_id=photo.id) }}" class="d-grid" onsubmit="return confirm('Ви впевнені, що хочете видалити це фото?');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger">Видалити</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">Фотографії відсутні</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальне вікно для додавання фото -->
+<div class="modal fade" id="addPhotoModal" tabindex="-1" aria-labelledby="addPhotoModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('add_device_photo', device_id=device.id) }}" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addPhotoModalLabel">Додати нове фото</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <label for="photo" class="form-label">Виберіть фото</label>
+                        <input type="file" class="form-control" id="photo" name="photo" accept="image/*" required>
+                        <div class="form-text">Підтримуються формати JPG, PNG, GIF.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Завантажити</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="mt-4">
+    <a href="{{ url_for('devices') }}" class="btn btn-secondary">Назад до списку</a>
+    <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary">Редагувати</a>
+    <a href="{{ url_for('device_history', device_id=device.id) }}" class="btn btn-info">
+        <i class="bi bi-clock-history"></i> Історія змін
+    </a>
+    <a href="{{ url_for('print_device_qrcode', device_id=device.id) }}" class="btn btn-success">
+        <i class="bi bi-qr-code"></i> QR-код
+    </a>
+</div>
+{% endblock %} 

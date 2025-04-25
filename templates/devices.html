@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Список пристроїв</h2>
+    <div>
+        <a href="{{ url_for('add_device') }}" class="btn btn-primary me-2">
+            <i class="bi bi-plus-lg"></i> Додати пристрій
+        </a>
+        <a href="{{ url_for('export_excel') }}" class="btn btn-success me-2">
+            <i class="bi bi-file-earmark-excel"></i> Експорт в Excel
+        </a>
+        {% if current_user.is_admin %}
+        <a href="{{ url_for('import_excel') }}" class="btn btn-info">
+            <i class="bi bi-file-earmark-arrow-up"></i> Імпорт з Excel
+        </a>
+        {% endif %}
+    </div>
+</div>
+<div class="row mb-3">
+    <div class="col-md-6 mb-2 mb-md-0">
+        <div class="d-flex flex-wrap">
+            <a href="{{ url_for('bulk_print_inventory') }}" class="btn btn-outline-primary me-2 mb-2">
+                <i class="bi bi-printer"></i> Масовий друк
+            </a>
+        </div>
+    </div>
+    {% if current_user.is_admin and cities|length > 1 %}
+    <div class="col-md-6">
+        <form method="GET" class="d-flex">
+            <select name="city_id" class="form-select me-2">
+                <option value="">Всі міста</option>
+                {% for city in cities %}
+                <option value="{{ city.id }}" {% if selected_city_id == city.id %}selected{% endif %}>{{ city.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline-primary">Фільтрувати</button>
+        </form>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Добавляємо контейнер з горизонтальним прокручуванням -->
+<div class="table-responsive-horizontal">
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Назва</th>
+                    <th>Інв. номер</th>
+                    <th>Тип</th>
+                    <th>Серійний номер</th>
+                    <th>Місто</th>
+                    <th>Розташування</th>
+                    <th>Статус</th>
+                    <th>Останнє обслуговування</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                <tr>
+                    <td>{{ device.name }}</td>
+                    <td>{{ device.inventory_number }}
+                        <a href="{{ url_for('print_inventory', device_id=device.id) }}" class="btn btn-sm btn-outline-primary ms-1" title="Друкувати інвентарний номер">
+                            <i class="bi bi-printer"></i>
+                        </a>
+                    </td>
+                    <td>{{ device.type }}</td>
+                    <td>{{ device.serial_number }}</td>
+                    <td>{{ device.city.name }}</td>
+                    <td>{{ device.location }}</td>
+                    <td>{{ device.status }}</td>
+                    <td>{{ device.last_maintenance.strftime('%d.%m.%Y') if device.last_maintenance else 'Не вказано' }}</td>
+                    <td>
+                        <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-sm btn-primary">Деталі</a>
+                        <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-sm btn-info">Редагувати</a>
+                        <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити цей пристрій? Всі пов\'язані дані та фотографії також будуть видалені.');">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger">Видалити</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Індикатор прокрутки для мобільних пристроїв -->
+<div class="d-md-none text-center mb-3">
+    <span class="swipe-hint">
+        <i class="bi bi-arrow-left-right"></i> Проведіть щоб побачити всі дані
+    </span>
+</div>
+
+<!-- Пагінація -->
+{% if pagination.pages > 1 %}
+<nav aria-label="Навігація по сторінках">
+    <ul class="pagination justify-content-center">
+        {% for page in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+            {% if page %}
+                {% if page != pagination.page %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('devices', page=page, city_id=selected_city_id) }}">{{ page }}</a>
+                    </li>
+                {% else %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page }}</span>
+                    </li>
+                {% endif %}
+            {% else %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+            {% endif %}
+        {% endfor %}
+    </ul>
+</nav>
+{% endif %}
+
+{% endblock %} 

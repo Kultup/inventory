@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="mb-3">
+    <h2>Історія змін пристрою: {{ device.name }}</h2>
+    <p><strong>Інвентарний номер:</strong> {{ device.inventory_number }}</p>
+    <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-primary">Повернутися до деталей</a>
+</div>
+
+<div class="card">
+    <div class="card-header bg-dark text-white">
+        Хронологія змін
+    </div>
+    <div class="card-body">
+        {% if history %}
+            <div class="timeline">
+                {% for entry in history %}
+                    <div class="timeline-item">
+                        <div class="timeline-marker 
+                            {% if entry.action == 'create' %}bg-success
+                            {% elif entry.action == 'update' %}bg-primary
+                            {% else %}bg-danger{% endif %}">
+                        </div>
+                        <div class="timeline-content">
+                            <div class="timeline-heading">
+                                <h6 class="timeline-title">
+                                    {% if entry.action == 'create' %}
+                                        <i class="bi bi-plus-circle text-success"></i> Створення пристрою
+                                    {% elif entry.action == 'update' %}
+                                        <i class="bi bi-pencil text-primary"></i> Оновлення поля "{{ entry.field }}"
+                                    {% else %}
+                                        <i class="bi bi-trash text-danger"></i> Видалення пристрою
+                                    {% endif %}
+                                </h6>
+                                <span class="text-muted small">
+                                    <i class="bi bi-person"></i> {{ entry.user.username }} &bull;
+                                    <i class="bi bi-clock"></i> {{ entry.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}
+                                </span>
+                            </div>
+                            
+                            {% if entry.action == 'update' %}
+                                <div class="timeline-body">
+                                    <div class="row mt-2">
+                                        <div class="col-md-6">
+                                            <div class="card bg-light">
+                                                <div class="card-header text-muted small">Попереднє значення</div>
+                                                <div class="card-body">
+                                                    {{ entry.old_value if entry.old_value else 'Не вказано' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card bg-light">
+                                                <div class="card-header text-muted small">Нове значення</div>
+                                                <div class="card-body">
+                                                    {{ entry.new_value if entry.new_value else 'Не вказано' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-center">Історія змін відсутня</p>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    .timeline {
+        position: relative;
+        padding-left: 1.5rem;
+        margin-left: 1rem;
+        border-left: 1px solid #e0e0e0;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 1.5rem;
+    }
+    
+    .timeline-marker {
+        position: absolute;
+        left: -1.38rem;
+        width: 1.25rem;
+        height: 1.25rem;
+        border-radius: 50%;
+    }
+    
+    .timeline-content {
+        padding-left: 1rem;
+    }
+    
+    .timeline-title {
+        margin-bottom: 0.25rem;
+    }
+</style>
+{% endblock %} 

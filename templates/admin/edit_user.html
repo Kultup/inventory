@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Редагувати користувача</h2>
+<div class="row">
+    <div class="col-md-6">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label for="username" class="form-label">Логін</label>
+                <input type="text" class="form-control" id="username" name="username" value="{{ user.username }}" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="password" class="form-label">Пароль (залиште порожнім, щоб не змінювати)</label>
+                <input type="password" class="form-control" id="password" name="password">
+                <div class="form-text">Якщо не хочете змінювати пароль, залиште поле порожнім.</div>
+            </div>
+            
+            <div class="mb-3">
+                <label for="city_id" class="form-label">Місто</label>
+                <select class="form-select" id="city_id" name="city_id" required>
+                    {% for city in cities %}
+                    <option value="{{ city.id }}" {% if city.id == user.city_id %}selected{% endif %}>{{ city.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="is_admin" name="is_admin" {% if user.is_admin %}checked{% endif %}>
+                <label class="form-check-label" for="is_admin">Адміністратор</label>
+            </div>
+            
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="is_active" name="is_active" {% if user.is_active %}checked{% endif %}>
+                <label class="form-check-label" for="is_active">Активний (відмітьте, щоб розблокувати)</label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Зберегти зміни</button>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">Скасувати</a>
+        </form>
+    </div>
+</div>
+{% endblock %} 

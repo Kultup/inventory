@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="uk" data-bs-theme="{{ request.cookies.get('theme', 'light') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Інвентаризація обладнання</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <!-- PWA підтримка -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#343a40">
+    
+    <!-- Іконки для iOS -->
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Інвентаризація">
+    
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1;
+        }
+        .navbar-theme-icon {
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+        
+        /* Анімація пульсації для значка нової функції */
+        .pulse-badge {
+            animation: pulse-animation 2s infinite;
+        }
+        
+        @keyframes pulse-animation {
+            0% {
+                box-shadow: 0 0 0 0 rgba(13, 110, 253, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(13, 110, 253, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(13, 110, 253, 0);
+            }
+        }
+        
+        /* Виділення пункту Вікі */
+        .wiki-link {
+            color: #0d6efd !important;
+            font-weight: bold;
+        }
+        
+        /* Адаптивні стилі для мобільних пристроїв */
+        @media (max-width: 768px) {
+            .table-responsive {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .table-responsive-horizontal {
+                position: relative;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .swipe-hint {
+                display: inline-block;
+                color: #6c757d;
+                background-color: rgba(0,0,0,0.05);
+                padding: 5px 10px;
+                border-radius: 4px;
+                font-size: 0.8rem;
+                animation: pulse 2s infinite;
+            }
+            
+            @keyframes pulse {
+                0% { opacity: 0.6; }
+                50% { opacity: 1; }
+                100% { opacity: 0.6; }
+            }
+            
+            .card {
+                margin-bottom: 1rem;
+            }
+            
+            .btn {
+                margin-bottom: 0.5rem;
+                margin-right: 0.5rem;
+            }
+            
+            .timeline {
+                margin-left: 0.5rem;
+                padding-left: 1rem;
+            }
+            
+            .form-group {
+                margin-bottom: 1rem;
+            }
+            
+            h2, h3, h4 {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+            
+            .container {
+                padding-left: 12px;
+                padding-right: 12px;
+            }
+        }
+        
+        /* Поліпшення для темної теми */
+        [data-bs-theme="dark"] .card {
+            background-color: #2b3035;
+            border-color: #495057;
+        }
+        
+        [data-bs-theme="dark"] .table {
+            color: #e9ecef;
+        }
+        
+        [data-bs-theme="dark"] .btn-outline-primary {
+            color: #6ea8fe;
+            border-color: #6ea8fe;
+        }
+        
+        [data-bs-theme="dark"] .btn-outline-primary:hover {
+            color: #000;
+            background-color: #6ea8fe;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+            <div class="container">
+                <a class="navbar-brand" href="{{ url_for('index') }}">
+                    <i class="bi bi-box-seam me-2"></i>Інвентаризація
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('index') }}">Головна</a>
+                        </li>
+                        {% if current_user.is_authenticated %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('devices') }}">Пристрої</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link wiki-link" href="{{ url_for('wiki') }}">
+                                <i class="bi bi-book"></i> Вікі <span class="badge bg-primary rounded-pill pulse-badge">Нове</span>
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                    <ul class="navbar-nav ms-auto">
+                        {% if current_user.is_authenticated %}
+                            {% if current_user.is_admin %}
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Адміністрування
+                                </a>
+                                <ul class="dropdown-menu" aria-labelledby="adminDropdown">
+                                    <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">Дашборд</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">Користувачі</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin_cities') }}">Міста</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin_user_activity') }}">Журнал дій</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('import_excel') }}">Імпорт пристроїв</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin_backup') }}">
+                                        <i class="bi bi-shield-lock"></i> Резервне копіювання та відновлення
+                                    </a></li>
+                                </ul>
+                            </li>
+                            {% endif %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('toggle_theme') }}">
+                                    {% if request.cookies.get('theme') == 'dark' %}
+                                        <i class="bi bi-sun navbar-theme-icon"></i>
+                                    {% else %}
+                                        <i class="bi bi-moon navbar-theme-icon"></i>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            <li class="nav-item" id="pwa-install-container" style="display: none;">
+                                <a class="nav-link" href="#" id="pwa-install-button">
+                                    <i class="bi bi-download"></i> Встановити додаток
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="#">{{ current_user.username }}</a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('logout') }}">Вихід</a>
+                            </li>
+                        {% else %}
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('toggle_theme') }}">
+                                    {% if request.cookies.get('theme') == 'dark' %}
+                                        <i class="bi bi-sun navbar-theme-icon"></i>
+                                    {% else %}
+                                        <i class="bi bi-moon navbar-theme-icon"></i>
+                                    {% endif %}
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link" href="{{ url_for('login') }}">Вхід</a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    
+    <main class="container mb-4">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-primary alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Закрити"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="bg-dark text-light py-3 mt-auto">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <p class="mb-0">&copy; 2023 Система інвентаризації</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="mb-0">Версія 1.0</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Скрипт для мобільного прокручування -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Функція для визначення мобільного пристрою
+            function isMobileDevice() {
+                return (window.innerWidth <= 768) || 
+                       /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            }
+            
+            if (isMobileDevice()) {
+                // Автоматично ховаємо підказку про гортання після першого гортання
+                const tableContainers = document.querySelectorAll('.table-responsive-horizontal');
+                const swipeHints = document.querySelectorAll('.swipe-hint');
+                
+                tableContainers.forEach(function(container) {
+                    container.addEventListener('scroll', function() {
+                        swipeHints.forEach(function(hint) {
+                            hint.style.opacity = '0';
+                            setTimeout(function() {
+                                hint.style.display = 'none';
+                            }, 500);
+                        });
+                    });
+                });
+            }
+        });
+    </script>
+    
+    <!-- PWA сервіс-воркер -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/static/sw.js')
+                .then(function(registration) {
+                    console.log('ServiceWorker успішно зареєстрований:', registration.scope);
+                })
+                .catch(function(error) {
+                    console.log('Помилка реєстрації ServiceWorker:', error);
+                });
+            });
+        }
+        
+        // Код для підтримки встановлення PWA
+        let deferredPrompt;
+        const pwaInstallContainer = document.getElementById('pwa-install-container');
+        const pwaInstallButton = document.getElementById('pwa-install-button');
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Запобігаємо автоматичному показу діалогу встановлення
+            e.preventDefault();
+            // Зберігаємо подію для використання пізніше
+            deferredPrompt = e;
+            // Показуємо кнопку встановлення
+            pwaInstallContainer.style.display = 'block';
+        });
+        
+        pwaInstallButton.addEventListener('click', (e) => {
+            // Приховуємо кнопку встановлення
+            pwaInstallContainer.style.display = 'none';
+            // Показуємо діалог встановлення
+            deferredPrompt.prompt();
+            // Чекаємо на вибір користувача
+            deferredPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('Користувач прийняв встановлення PWA');
+                } else {
+                    console.log('Користувач відхилив встановлення PWA');
+                }
+                deferredPrompt = null;
+            });
+        });
+        
+        // Перевіряємо, чи PWA вже встановлений
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('PWA успішно встановлено!');
+            pwaInstallContainer.style.display = 'none';
+        });
+    </script>
+</body>
+</html> 

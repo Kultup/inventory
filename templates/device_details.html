@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h2 class="mb-0">
+                <i class="bi bi-device-hdd me-2"></i>Деталі пристрою
+            </h2>
+            <div>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-light">
+                    <i class="bi bi-pencil me-1"></i>Редагувати
+                </a>
+                <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}" class="d-inline ms-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger" onclick="return confirm('Ви впевнені, що хочете видалити цей пристрій?');">
+                        <i class="bi bi-trash me-1"></i>Видалити
+                    </button>
+                </form>
+                {% endif %}
+                <a href="{{ url_for('devices_list') }}" class="btn btn-light ms-2">
+                    <i class="bi bi-arrow-left me-1"></i>Назад до списку
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Основна інформація</h5>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-bordered">
+                                <tr>
+                                    <th class="bg-light" style="width: 40%">Назва:</th>
+                                    <td>{{ device.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Інвентарний номер:</th>
+                                    <td>{{ device.inventory_number }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Тип пристрою:</th>
+                                    <td>{{ device.type }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Модель:</th>
+                                    <td>{{ device.model or 'Не вказано' }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Серійний номер:</th>
+                                    <td>{{ device.serial_number or 'Не вказано' }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Місто:</th>
+                                    <td>{{ device.city.name }}</td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Статус:</th>
+                                    <td>
+                                        {% if device.status == 'active' %}
+                                            <span class="badge bg-success">Активний</span>
+                                        {% elif device.status == 'inactive' %}
+                                            <span class="badge bg-secondary">Неактивний</span>
+                                        {% elif device.status == 'repair' %}
+                                            <span class="badge bg-warning text-dark">На ремонті</span>
+                                        {% elif device.status == 'decommissioned' %}
+                                            <span class="badge bg-danger">Списаний</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-calendar-check me-2"></i>Технічне обслуговування</h5>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-bordered">
+                                <tr>
+                                    <th class="bg-light" style="width: 40%">Останнє ТО:</th>
+                                    <td>
+                                        {% if device.last_maintenance %}
+                                            {{ device.last_maintenance.strftime('%d.%m.%Y') }}
+                                        {% else %}
+                                            <span class="badge bg-secondary">Не проводилось</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Наступне ТО:</th>
+                                    <td>
+                                        {% if device.next_maintenance %}
+                                            {{ device.next_maintenance.strftime('%d.%m.%Y') }}
+                                        {% else %}
+                                            <span class="badge bg-secondary">Не заплановано</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <th class="bg-light">Інтервал ТО:</th>
+                                    <td>{{ device.maintenance_interval or 365 }} днів</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-text me-2"></i>Додаткова інформація</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <h6>Дата придбання:</h6>
+                                <p>{{ device.purchase_date.strftime('%d.%m.%Y') if device.purchase_date else 'Не вказано' }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Гарантія до:</h6>
+                                <p>{{ device.warranty_end.strftime('%d.%m.%Y') if device.warranty_end else 'Не вказано' }}</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <h6>Відповідальна особа:</h6>
+                                <p>{{ device.responsible_person or 'Не вказано' }}</p>
+                            </div>
+                            <div class="mb-3">
+                                <h6>Розташування:</h6>
+                                <p>{{ device.location or 'Не вказано' }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <h6>Примітки:</h6>
+                        <p class="mb-0">{{ device.notes or 'Немає додаткових приміток' }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

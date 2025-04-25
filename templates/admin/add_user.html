@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Додати нового користувача</h2>
+<div class="row">
+    <div class="col-md-6">
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="mb-3">
+                <label for="username" class="form-label">Логін</label>
+                <input type="text" class="form-control" id="username" name="username" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="password" class="form-label">Пароль</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            
+            <div class="mb-3">
+                <label for="city_id" class="form-label">Місто</label>
+                <select class="form-select" id="city_id" name="city_id" required>
+                    {% for city in cities %}
+                    <option value="{{ city.id }}" {% if city.id == current_user.city_id %}selected{% endif %}>{{ city.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="is_admin" name="is_admin">
+                <label class="form-check-label" for="is_admin">Адміністратор</label>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Додати користувача</button>
+            <a href="{{ url_for('admin_users') }}" class="btn btn-secondary">Скасувати</a>
+        </form>
+    </div>
+</div>
+{% endblock %} 

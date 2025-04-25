@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col">
+        <h2>Масовий друк інвентарних номерів</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('devices') }}" class="btn btn-secondary">Назад до списку</a>
+    </div>
+</div>
+
+{% if current_user.is_admin and cities|length > 1 %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <form method="GET" class="d-flex">
+            <select name="city_id" class="form-select me-2">
+                <option value="">Всі міста</option>
+                {% for city in cities %}
+                <option value="{{ city.id }}" {% if selected_city_id == city.id %}selected{% endif %}>{{ city.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline-primary">Фільтрувати</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-printer"></i> Друкувати вибрані
+                </button>
+                <button type="button" class="btn btn-outline-secondary ms-2" id="selectAll">Вибрати всі</button>
+                <button type="button" class="btn btn-outline-secondary ms-2" id="deselectAll">Зняти всі</button>
+            </div>
+            <div>
+                <span class="badge bg-primary" id="selectedCount">0</span> пристроїв вибрано
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th style="width: 50px;"><input type="checkbox" id="masterCheckbox"></th>
+                    <th>Назва</th>
+                    <th>Інв. номер</th>
+                    <th>Тип</th>
+                    <th>Місто</th>
+                    <th>Розташування</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                <tr>
+                    <td>
+                        <input type="checkbox" name="device_ids" value="{{ device.id }}" class="device-checkbox">
+                    </td>
+                    <td>{{ device.name }}</td>
+                    <td>{{ device.inventory_number }}</td>
+                    <td>{{ device.type }}</td>
+                    <td>{{ device.city.name }}</td>
+                    <td>{{ device.location }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const masterCheckbox = document.getElementById('masterCheckbox');
+        const deviceCheckboxes = document.querySelectorAll('.device-checkbox');
+        const selectAllBtn = document.getElementById('selectAll');
+        const deselectAllBtn = document.getElementById('deselectAll');
+        const selectedCount = document.getElementById('selectedCount');
+        
+        // Функція для оновлення лічильника вибраних пристроїв
+        function updateSelectedCount() {
+            const count = document.querySelectorAll('.device-checkbox:checked').length;
+            selectedCount.textContent = count;
+        }
+        
+        // Головний чекбокс переключає всі
+        masterCheckbox.addEventListener('change', function() {
+            deviceCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateSelectedCount();
+        });
+        
+        // При зміні будь-якого чекбоксу оновлюємо лічильник
+        deviceCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                updateSelectedCount();
+                
+                // Перевіряємо, чи всі чекбокси вибрані
+                const allChecked = document.querySelectorAll('.device-checkbox:checked').length === deviceCheckboxes.length;
+                masterCheckbox.checked = allChecked;
+            });
+        });
+        
+        // Кнопка "Вибрати всі"
+        selectAllBtn.addEventListener('click', function() {
+            deviceCheckboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            masterCheckbox.checked = true;
+            updateSelectedCount();
+        });
+        
+        // Кнопка "Зняти всі"
+        deselectAllBtn.addEventListener('click', function() {
+            deviceCheckboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            masterCheckbox.checked = false;
+            updateSelectedCount();
+        });
+        
+        // Ініціалізуємо лічильник
+        updateSelectedCount();
+    });
+</script>
+{% endblock %} 

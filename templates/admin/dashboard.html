@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Панель адміністратора</h2>
+
+<!-- Загальна статистика -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <h5 class="card-title">Всього пристроїв</h5>
+                <h1 class="display-4">{{ total_devices }}</h1>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <h5 class="card-title">Всього користувачів</h5>
+                <h1 class="display-4">{{ total_users }}</h1>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <h5 class="card-title">Всього міст</h5>
+                <h1 class="display-4">{{ total_cities }}</h1>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Розподіл пристроїв за містами
+            </div>
+            <div class="card-body">
+                <canvas id="devicesByCityChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Розподіл пристроїв за типом
+            </div>
+            <div class="card-body">
+                <canvas id="devicesByTypeChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Розподіл пристроїв за статусом
+            </div>
+            <div class="card-body">
+                <canvas id="devicesByStatusChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                Нові пристрої за місяцями
+            </div>
+            <div class="card-body">
+                <canvas id="devicesByMonthChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        Статистика за останні 30 днів
+    </div>
+    <div class="card-body">
+        <h3>Додано нових пристроїв: <span class="badge bg-primary">{{ new_devices_count }}</span></h3>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Графік розподілу за містами
+        const cityData = {
+            labels: [{% for city, count in devices_by_city %}'{{ city }}',{% endfor %}],
+            datasets: [{
+                label: 'Кількість пристроїв',
+                data: [{% for city, count in devices_by_city %}{{ count }},{% endfor %}],
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.6)',
+                    'rgba(255, 99, 132, 0.6)',
+                    'rgba(255, 206, 86, 0.6)',
+                    'rgba(75, 192, 192, 0.6)',
+                    'rgba(153, 102, 255, 0.6)',
+                    'rgba(255, 159, 64, 0.6)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        new Chart(document.getElementById('devicesByCityChart'), {
+            type: 'pie',
+            data: cityData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    }
+                }
+            }
+        });
+
+        // Графік розподілу за типом
+        const typeData = {
+            labels: [{% for type, count in devices_by_type %}'{{ type }}',{% endfor %}],
+            datasets: [{
+                label: 'Кількість пристроїв',
+                data: [{% for type, count in devices_by_type %}{{ count }},{% endfor %}],
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        };
+        new Chart(document.getElementById('devicesByTypeChart'), {
+            type: 'bar',
+            data: typeData,
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Графік розподілу за статусом
+        const statusData = {
+            labels: [{% for status, count in devices_by_status %}'{{ status }}',{% endfor %}],
+            datasets: [{
+                label: 'Кількість пристроїв',
+                data: [{% for status, count in devices_by_status %}{{ count }},{% endfor %}],
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.6)',
+                    'rgba(255, 99, 132, 0.6)',
+                    'rgba(255, 206, 86, 0.6)',
+                    'rgba(75, 192, 192, 0.6)'
+                ],
+                borderWidth: 1
+            }]
+        };
+        new Chart(document.getElementById('devicesByStatusChart'), {
+            type: 'doughnut',
+            data: statusData,
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                    }
+                }
+            }
+        });
+
+        // Графік нових пристроїв за місяцями
+        const monthData = {
+            labels: [{% for month, count in devices_by_month %}'{{ month }}',{% endfor %}],
+            datasets: [{
+                label: 'Нові пристрої',
+                data: [{% for month, count in devices_by_month %}{{ count }},{% endfor %}],
+                fill: false,
+                borderColor: 'rgba(75, 192, 192, 1)',
+                tension: 0.1
+            }]
+        };
+        new Chart(document.getElementById('devicesByMonthChart'), {
+            type: 'line',
+            data: monthData,
+            options: {
+                responsive: true
+            }
+        });
+    });
+</script>
+{% endblock %} 

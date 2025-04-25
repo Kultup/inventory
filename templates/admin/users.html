@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Керування користувачами</h2>
+<a href="{{ url_for('admin_add_user') }}" class="btn btn-primary mb-3">Додати нового користувача</a>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Логін</th>
+                <th>Адміністратор</th>
+                <th>Статус</th>
+                <th>Місто</th>
+                <th>Дата створення</th>
+                <th>Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in users %}
+            <tr>
+                <td>{{ user.id }}</td>
+                <td>{{ user.username }}</td>
+                <td>{% if user.is_admin %}<span class="badge bg-success">Так</span>{% else %}<span class="badge bg-secondary">Ні</span>{% endif %}</td>
+                <td>{% if user.is_active %}<span class="badge bg-success">Активний</span>{% else %}<span class="badge bg-danger">Заблокований</span>{% endif %}</td>
+                <td>{{ user.city.name if user.city else 'Не визначено' }}</td>
+                <td>{{ user.created_at.strftime('%d.%m.%Y %H:%M') }}</td>
+                <td>
+                    {% if user.id != current_user.id %}
+                    <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-sm btn-info">Редагувати</a>
+                    <a href="{{ url_for('admin_toggle_user', user_id=user.id) }}" class="btn btn-sm {% if user.is_active %}btn-warning{% else %}btn-success{% endif %}">
+                        {% if user.is_active %}Заблокувати{% else %}Розблокувати{% endif %}
+                    </a>
+                    <form method="POST" action="{{ url_for('admin_delete_user', user_id=user.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити цього користувача?');">
+                        <button type="submit" class="btn btn-sm btn-danger">Видалити</button>
+                    </form>
+                    {% else %}
+                    <span class="text-muted">Поточний користувач</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %} 

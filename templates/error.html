@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card border-danger">
+        <div class="card-header bg-danger text-white">
+            <h3>{{ error_title|default('Помилка') }}</h3>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-danger">
+                <p>{{ error_message|default('Сталася помилка. Будь ласка, спробуйте ще раз.') }}</p>
+            </div>
+            <p>Можливі причини:</p>
+            <ul>
+                <li>Закінчився час сесії</li>
+                <li>Ви відкрили сторінку в новій вкладці</li>
+                <li>Ви використали кнопку "Назад" в браузері</li>
+            </ul>
+            <div class="mt-4">
+                <a href="{{ url_for('index') }}" class="btn btn-primary">На головну</a>
+                <button onclick="history.back()" class="btn btn-secondary">Назад</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
