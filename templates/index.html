@@ -10,17 +10,17 @@
     <p>Ви можете додавати нові пристрої, переглядати існуючі та керувати їх статусом.</p>
     <div class="d-flex flex-wrap gap-2">
         <a class="btn btn-primary btn-lg" href="{{ url_for('devices') }}" role="button">Переглянути пристрої</a>
-        <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
+        {# <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
             <i class="bi bi-book-half"></i> Документація
-        </a>
+        </a> #}
     </div>
     {% else %}
     <p>Будь ласка, увійдіть до системи для отримання доступу до функцій інвентаризації.</p>
     <div class="d-flex flex-wrap gap-2">
         <a class="btn btn-primary btn-lg" href="{{ url_for('login') }}" role="button">Увійти до системи</a>
-        <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
+        {# <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
             <i class="bi bi-book-half"></i> Документація
-        </a>
+        </a> #}
     </div>
     {% endif %}
 </div>
@@ -31,8 +31,8 @@
         <div>
             <h3>Нова документація доступна!</h3>
             <p>Ми додали розділ Вікі з детальними інструкціями щодо використання системи інвентаризації. Дізнайтеся про всі можливості системи!</p>
-            <a href="{{ url_for('wiki') }}" class="btn btn-sm btn-primary">Перейти до Вікі</a>
+            {# <a href="{{ url_for('wiki') }}" class="btn btn-sm btn-primary">Перейти до Вікі</a> #}
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

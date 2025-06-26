@@ -2,28 +2,38 @@
 
 {% block content %}
 <h2>Додати новий пристрій</h2>
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
 <form method="POST" enctype="multipart/form-data">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="mb-3">
         <label for="name" class="form-label">Назва</label>
-        <input type="text" class="form-control" id="name" name="name" required>
+        <input type="text" class="form-control" id="name" name="name" value="{{ request.form.get('name', '') }}" required>
     </div>
     
     <div class="mb-3">
         <label for="type" class="form-label">Тип пристрою</label>
         <select class="form-select" id="type" name="type" required>
             <option value="">Виберіть тип</option>
-            <option value="Комп'ютер">Комп'ютер</option>
-            <option value="Ноутбук">Ноутбук</option>
-            <option value="Принтер">Принтер</option>
-            <option value="Мережеве обладнання">Мережеве обладнання</option>
-            <option value="Інше">Інше</option>
+            <option value="Комп'ютер" {% if request.form.get('type') == "Комп'ютер" %}selected{% endif %}>Комп'ютер</option>
+            <option value="Ноутбук" {% if request.form.get('type') == "Ноутбук" %}selected{% endif %}>Ноутбук</option>
+            <option value="Принтер" {% if request.form.get('type') == "Принтер" %}selected{% endif %}>Принтер</option>
+            <option value="Мережеве обладнання" {% if request.form.get('type') == "Мережеве обладнання" %}selected{% endif %}>Мережеве обладнання</option>
+            <option value="Інше" {% if request.form.get('type') == "Інше" %}selected{% endif %}>Інше</option>
         </select>
     </div>
 
     <div class="mb-3">
         <label for="serial_number" class="form-label">Серійний номер</label>
-        <input type="text" class="form-control" id="serial_number" name="serial_number" required>
+        <input type="text" class="form-control" id="serial_number" name="serial_number" value="{{ request.form.get('serial_number', '') }}" required>
         <div class="form-text">Інвентарний номер буде згенеровано автоматично.</div>
     </div>
 
@@ -32,7 +42,7 @@
         <label for="city_id" class="form-label">Місто</label>
         <select class="form-select" id="city_id" name="city_id" required>
             {% for city in cities %}
-            <option value="{{ city.id }}" {% if city.id == current_user.city_id %}selected{% endif %}>{{ city.name }}</option>
+            <option value="{{ city.id }}" {% if request.form.get('city_id')|int == city.id %}selected{% elif city.id == current_user.city_id and not request.form.get('city_id') %}selected{% endif %}>{{ city.name }}</option>
             {% endfor %}
         </select>
     </div>
@@ -40,34 +50,34 @@
 
     <div class="mb-3">
         <label for="location" class="form-label">Розташування</label>
-        <input type="text" class="form-control" id="location" name="location" required>
+        <input type="text" class="form-control" id="location" name="location" value="{{ request.form.get('location', '') }}" required>
     </div>
 
     <div class="mb-3">
         <label for="status" class="form-label">Статус</label>
         <select class="form-select" id="status" name="status" required>
             <option value="">Виберіть статус</option>
-            <option value="В експлуатації">В експлуатації</option>
-            <option value="На ремонті">На ремонті</option>
-            <option value="Резерв">Резерв</option>
-            <option value="Списано">Списано</option>
+            <option value="В експлуатації" {% if request.form.get('status') == "В експлуатації" %}selected{% endif %}>В експлуатації</option>
+            <option value="На ремонті" {% if request.form.get('status') == "На ремонті" %}selected{% endif %}>На ремонті</option>
+            <option value="Резерв" {% if request.form.get('status') == "Резерв" %}selected{% endif %}>Резерв</option>
+            <option value="Списано" {% if request.form.get('status') == "Списано" %}selected{% endif %}>Списано</option>
         </select>
     </div>
 
     <div class="mb-3">
         <label for="notes" class="form-label">Примітки</label>
-        <textarea class="form-control" id="notes" name="notes" rows="3"></textarea>
+        <textarea class="form-control" id="notes" name="notes" rows="3">{{ request.form.get('notes', '') }}</textarea>
     </div>
 
     <div class="mb-3">
         <label for="last_maintenance" class="form-label">Дата останнього обслуговування</label>
-        <input type="date" class="form-control" id="last_maintenance" name="last_maintenance">
+        <input type="date" class="form-control" id="last_maintenance" name="last_maintenance" value="{{ request.form.get('last_maintenance', '') }}">
         <div class="form-text">Залиште порожнім, якщо не було обслуговування.</div>
     </div>
 
     <div class="mb-3">
         <label for="maintenance_interval" class="form-label">Інтервал обслуговування (днів)</label>
-        <input type="number" class="form-control" id="maintenance_interval" name="maintenance_interval" value="365" min="1">
+        <input type="number" class="form-control" id="maintenance_interval" name="maintenance_interval" value="{{ request.form.get('maintenance_interval', '365') }}" min="1">
         <div class="form-text">Кількість днів до наступного планового обслуговування.</div>
     </div>
 
@@ -80,4 +90,4 @@
     <button type="submit" class="btn btn-primary">Додати пристрій</button>
     <a href="{{ url_for('devices') }}" class="btn btn-secondary">Скасувати</a>
 </form>
-{% endblock %} 
+{% endblock %}

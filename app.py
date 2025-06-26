@@ -339,10 +339,7 @@ def log_activity(action_description):
 def index():
     return render_template('index.html')
 
-@app.route('/wiki')
-def wiki():
-    """Сторінка з документацією по використанню системи"""
-    return render_template('wiki.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -403,6 +400,17 @@ def devices():
 @log_activity('Перегляд форми додавання пристрою')
 def add_device():
     if request.method == 'POST':
+        # Перевіряємо чи існує пристрій з таким серійним номером
+        serial_number = request.form['serial_number']
+        existing_device = Device.query.filter_by(serial_number=serial_number).first()
+        if existing_device:
+            flash('Пристрій з таким серійним номером вже існує!', 'error')
+            if current_user.is_admin:
+                cities = City.query.all()
+            else:
+                cities = [current_user.city]
+            return render_template('add_device.html', cities=cities)
+
         # Визначаємо місто для пристрою
         if current_user.is_admin and request.form.get('city_id'):
             city_id = request.form.get('city_id', type=int)
