@@ -9,7 +9,7 @@
     {% if current_user.is_authenticated %}
     <p>Ви можете додавати нові пристрої, переглядати існуючі та керувати їх статусом.</p>
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary btn-lg" href="{{ url_for('devices') }}" role="button">Переглянути пристрої</a>
+        <a class="btn btn-primary btn-lg" href="{{ url_for('devices.devices') }}" role="button">Переглянути пристрої</a>
         {# <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
             <i class="bi bi-book-half"></i> Документація
         </a> #}
@@ -17,7 +17,7 @@
     {% else %}
     <p>Будь ласка, увійдіть до системи для отримання доступу до функцій інвентаризації.</p>
     <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary btn-lg" href="{{ url_for('login') }}" role="button">Увійти до системи</a>
+        <a class="btn btn-primary btn-lg" href="{{ url_for('auth.login') }}" role="button">Увійти до системи</a>
         {# <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
             <i class="bi bi-book-half"></i> Документація
         </a> #}

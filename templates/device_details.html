@@ -9,17 +9,17 @@
             </h2>
             <div>
                 {% if current_user.is_admin %}
-                <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-light">
+                <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-light">
                     <i class="bi bi-pencil me-1"></i>Редагувати
                 </a>
-                <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}" class="d-inline ms-2">
+                <form method="POST" action="{{ url_for('devices.delete_device', device_id=device.id) }}" class="d-inline ms-2">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-danger" onclick="return confirm('Ви впевнені, що хочете видалити цей пристрій?');">
                         <i class="bi bi-trash me-1"></i>Видалити
                     </button>
                 </form>
                 {% endif %}
-                <a href="{{ url_for('devices_list') }}" class="btn btn-light ms-2">
+                <a href="{{ url_for('devices.devices') }}" class="btn btn-light ms-2">
                     <i class="bi bi-arrow-left me-1"></i>Назад до списку
                 </a>
             </div>
@@ -148,4 +148,4 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

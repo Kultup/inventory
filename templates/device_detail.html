@@ -6,12 +6,12 @@
         <h2>Деталі пристрою</h2>
     </div>
     <div class="col-auto">
-        <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-info me-2">Редагувати</a>
-        <form method="POST" action="{{ url_for('delete_device', device_id=device.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити цей пристрій? Всі пов\'язані дані та фотографії також будуть видалені.');">
+        <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-info me-2">Редагувати</a>
+        <form method="POST" action="{{ url_for('devices.delete_device', device_id=device.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити цей пристрій? Всі пов\'язані дані та фотографії також будуть видалені.');">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger me-2">Видалити</button>
         </form>
-        <a href="{{ url_for('devices') }}" class="btn btn-secondary">Назад до списку</a>
+        <a href="{{ url_for('devices.devices') }}" class="btn btn-secondary">Назад до списку</a>
     </div>
 </div>
 
@@ -31,7 +31,7 @@
                         <th>Інвентарний номер:</th>
                         <td>
                             <strong class="text-primary">{{ device.inventory_number }}</strong>
-                            <a href="{{ url_for('print_inventory', device_id=device.id) }}" class="btn btn-sm btn-outline-primary ms-2" title="Друкувати інвентарний номер">
+                            <a href="{{ url_for('devices.print_inventory', device_id=device.id) }}" class="btn btn-sm btn-outline-primary ms-2" title="Друкувати інвентарний номер">
                                 <i class="bi bi-printer"></i> Друкувати
                             </a>
                         </td>
@@ -136,12 +136,12 @@
             {% for photo in device.photos %}
             <div class="col-md-3 mb-3">
                 <div class="card">
-                    <a href="{{ url_for('uploaded_file', filename=photo.filename) }}" target="_blank" title="Відкрити повне зображення">
-                        <img src="{{ url_for('uploaded_file', filename=photo.filename) }}" class="card-img-top" alt="Фото пристрою" style="height: 150px; object-fit: cover;">
+                    <a href="{{ url_for('devices.uploaded_file', filename=photo.filename) }}" target="_blank" title="Відкрити повне зображення">
+                        <img src="{{ url_for('devices.uploaded_file', filename=photo.filename) }}" class="card-img-top" alt="Фото пристрою" style="height: 150px; object-fit: cover;">
                     </a>
                     <div class="card-body p-2">
                         <p class="card-text small">{{ photo.original_filename }}</p>
-                        <form method="POST" action="{{ url_for('delete_device_photo', photo_id=photo.id) }}" class="d-grid" onsubmit="return confirm('Ви впевнені, що хочете видалити це фото?');">
+                        <form method="POST" action="{{ url_for('devices.delete_device_photo', photo_id=photo.id) }}" class="d-grid" onsubmit="return confirm('Ви впевнені, що хочете видалити це фото?');">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger">Видалити</button>
                         </form>
@@ -160,7 +160,7 @@
 <div class="modal fade" id="addPhotoModal" tabindex="-1" aria-labelledby="addPhotoModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('add_device_photo', device_id=device.id) }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('devices.add_device_photo', device_id=device.id) }}" enctype="multipart/form-data">
                 <div class="modal-header">
                     <h5 class="modal-title" id="addPhotoModalLabel">Додати нове фото</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
@@ -183,13 +183,13 @@
 </div>
 
 <div class="mt-4">
-    <a href="{{ url_for('devices') }}" class="btn btn-secondary">Назад до списку</a>
-    <a href="{{ url_for('edit_device', device_id=device.id) }}" class="btn btn-primary">Редагувати</a>
-    <a href="{{ url_for('device_history', device_id=device.id) }}" class="btn btn-info">
+    <a href="{{ url_for('devices.devices') }}" class="btn btn-secondary">Назад до списку</a>
+    <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-primary">Редагувати</a>
+    <a href="{{ url_for('devices.device_history', device_id=device.id) }}" class="btn btn-info">
         <i class="bi bi-clock-history"></i> Історія змін
     </a>
-    <a href="{{ url_for('print_device_qrcode', device_id=device.id) }}" class="btn btn-success">
+    <a href="{{ url_for('devices.print_device_qrcode', device_id=device.id) }}" class="btn btn-success">
         <i class="bi bi-qr-code"></i> QR-код
     </a>
 </div>
-{% endblock %} 
+{% endblock %}

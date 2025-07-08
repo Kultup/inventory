@@ -83,11 +83,174 @@
 
     <div class="mb-3">
         <label for="photos" class="form-label">Фотографії пристрою</label>
-        <input type="file" class="form-control" id="photos" name="photos" multiple accept="image/*">
-        <div class="form-text">Ви можете вибрати декілька файлів. Підтримуються формати JPG, PNG, GIF.</div>
+        <div class="drag-drop-area" id="dragDropArea">
+            <div class="drag-drop-content">
+                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                <p class="mb-2">Перетягніть файли сюди або <span class="text-primary">натисніть для вибору</span></p>
+                <p class="text-muted small">Підтримуються формати JPG, PNG, GIF</p>
+            </div>
+            <input type="file" class="form-control d-none" id="photos" name="photos" multiple accept="image/*">
+        </div>
+        <div id="fileList" class="mt-2"></div>
     </div>
 
     <button type="submit" class="btn btn-primary">Додати пристрій</button>
-    <a href="{{ url_for('devices') }}" class="btn btn-secondary">Скасувати</a>
+    <a href="{{ url_for('devices.devices') }}" class="btn btn-secondary">Скасувати</a>
 </form>
+
+<style>
+.drag-drop-area {
+    border: 2px dashed #dee2e6;
+    border-radius: 0.375rem;
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+}
+
+.drag-drop-area:hover {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+}
+
+.drag-drop-area.dragover {
+    border-color: #0d6efd;
+    background-color: #e7f1ff;
+    transform: scale(1.02);
+}
+
+.file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
+}
+
+.file-item .file-info {
+    display: flex;
+    align-items: center;
+}
+
+.file-item .file-icon {
+    margin-right: 0.5rem;
+    color: #6c757d;
+}
+
+.file-item .remove-file {
+    color: #dc3545;
+    cursor: pointer;
+    padding: 0.25rem;
+}
+
+.file-item .remove-file:hover {
+    color: #b02a37;
+}
+
+[data-bs-theme="dark"] .drag-drop-area {
+    background-color: #2d2d2d;
+    border-color: #495057;
+}
+
+[data-bs-theme="dark"] .drag-drop-area:hover {
+    border-color: #6ea8fe;
+    background-color: #1e3a5f;
+}
+
+[data-bs-theme="dark"] .drag-drop-area.dragover {
+    border-color: #6ea8fe;
+    background-color: #1e3a5f;
+}
+
+[data-bs-theme="dark"] .file-item {
+    background-color: #2d2d2d;
+    border-color: #495057;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const dragDropArea = document.getElementById('dragDropArea');
+    const fileInput = document.getElementById('photos');
+    const fileList = document.getElementById('fileList');
+    let selectedFiles = [];
+
+    // Клік по області для вибору файлів
+    dragDropArea.addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    // Обробка вибору файлів через input
+    fileInput.addEventListener('change', function(e) {
+        handleFiles(e.target.files);
+    });
+
+    // Drag & Drop події
+    dragDropArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dragDropArea.classList.add('dragover');
+    });
+
+    dragDropArea.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dragDropArea.classList.remove('dragover');
+    });
+
+    dragDropArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dragDropArea.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    function handleFiles(files) {
+        for (let file of files) {
+            if (file.type.startsWith('image/')) {
+                selectedFiles.push(file);
+            }
+        }
+        updateFileList();
+        updateFileInput();
+    }
+
+    function updateFileList() {
+        fileList.innerHTML = '';
+        selectedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <i class="fas fa-image file-icon"></i>
+                    <span>${file.name} (${formatFileSize(file.size)})</span>
+                </div>
+                <i class="fas fa-times remove-file" onclick="removeFile(${index})"></i>
+            `;
+            fileList.appendChild(fileItem);
+        });
+    }
+
+    function updateFileInput() {
+        const dt = new DataTransfer();
+        selectedFiles.forEach(file => dt.items.add(file));
+        fileInput.files = dt.files;
+    }
+
+    window.removeFile = function(index) {
+        selectedFiles.splice(index, 1);
+        updateFileList();
+        updateFileInput();
+    };
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+});
+</script>
 {% endblock %}

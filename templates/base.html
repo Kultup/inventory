@@ -54,11 +54,13 @@
             font-weight: bold;
         }
         
-        /* Адаптивні стилі для мобільних пристроїв */
+        /* Покращені адаптивні стилі для мобільних пристроїв */
         @media (max-width: 768px) {
             .table-responsive {
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
+                border-radius: 0.375rem;
+                box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
             }
             
             .table-responsive-horizontal {
@@ -66,31 +68,45 @@
                 width: 100%;
                 overflow-x: auto;
                 -webkit-overflow-scrolling: touch;
+                border-radius: 0.375rem;
             }
             
             .swipe-hint {
                 display: inline-block;
                 color: #6c757d;
                 background-color: rgba(0,0,0,0.05);
-                padding: 5px 10px;
-                border-radius: 4px;
-                font-size: 0.8rem;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 0.85rem;
                 animation: pulse 2s infinite;
+                margin: 0.5rem 0;
             }
             
             @keyframes pulse {
-                0% { opacity: 0.6; }
-                50% { opacity: 1; }
-                100% { opacity: 0.6; }
+                0% { opacity: 0.6; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.02); }
+                100% { opacity: 0.6; transform: scale(1); }
             }
             
             .card {
-                margin-bottom: 1rem;
+                margin-bottom: 1.5rem;
+                border-radius: 0.5rem;
+                box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
             }
             
             .btn {
-                margin-bottom: 0.5rem;
+                margin-bottom: 0.75rem;
                 margin-right: 0.5rem;
+                min-width: 44px;
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .btn-group .btn {
+                margin-bottom: 0;
+                margin-right: 0;
             }
             
             .timeline {
@@ -98,29 +114,98 @@
                 padding-left: 1rem;
             }
             
-            .form-group {
-                margin-bottom: 1rem;
+            .form-group, .mb-3 {
+                margin-bottom: 1.5rem;
             }
             
-            h2, h3, h4 {
-                font-size: 1.5rem;
-                margin-bottom: 1rem;
-            }
+            h1 { font-size: 1.75rem; }
+            h2 { font-size: 1.5rem; }
+            h3 { font-size: 1.25rem; }
+            h4 { font-size: 1.1rem; }
             
             .container {
-                padding-left: 12px;
-                padding-right: 12px;
+                padding-left: 15px;
+                padding-right: 15px;
+            }
+            
+            .navbar-nav .nav-link {
+                padding: 0.75rem 1rem;
+            }
+            
+            .dropdown-menu {
+                border-radius: 0.5rem;
+                box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+            }
+            
+            .pagination {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+            
+            .pagination .page-link {
+                min-width: 44px;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            .table td, .table th {
+                padding: 0.75rem 0.5rem;
+                white-space: nowrap;
+            }
+            
+            .badge {
+                font-size: 0.75rem;
+                padding: 0.375rem 0.5rem;
             }
         }
         
-        /* Поліпшення для темної теми */
+        /* Покращення для планшетів */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .container {
+                max-width: 95%;
+            }
+            
+            .table td, .table th {
+                padding: 0.75rem;
+            }
+        }
+        
+        /* Покращена темна тема */
+        [data-bs-theme="dark"] {
+            --bs-body-bg: #121212;
+            --bs-body-color: #e9ecef;
+            --bs-border-color: #495057;
+        }
+        
         [data-bs-theme="dark"] .card {
-            background-color: #2b3035;
+            background-color: #1e1e1e;
             border-color: #495057;
+            box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.3);
+        }
+        
+        [data-bs-theme="dark"] .card-header {
+            background-color: #2d2d2d;
+            border-bottom-color: #495057;
         }
         
         [data-bs-theme="dark"] .table {
             color: #e9ecef;
+            --bs-table-bg: transparent;
+        }
+        
+        [data-bs-theme="dark"] .table-dark {
+            --bs-table-bg: #2d2d2d;
+            --bs-table-striped-bg: #343a40;
+        }
+        
+        [data-bs-theme="dark"] .table-striped > tbody > tr:nth-of-type(odd) > td {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        [data-bs-theme="dark"] .table-hover > tbody > tr:hover > td {
+            background-color: rgba(255, 255, 255, 0.1);
         }
         
         [data-bs-theme="dark"] .btn-outline-primary {
@@ -131,6 +216,108 @@
         [data-bs-theme="dark"] .btn-outline-primary:hover {
             color: #000;
             background-color: #6ea8fe;
+            border-color: #6ea8fe;
+        }
+        
+        [data-bs-theme="dark"] .btn-outline-info {
+            color: #6edff6;
+            border-color: #6edff6;
+        }
+        
+        [data-bs-theme="dark"] .btn-outline-info:hover {
+            color: #000;
+            background-color: #6edff6;
+            border-color: #6edff6;
+        }
+        
+        [data-bs-theme="dark"] .btn-outline-danger {
+            color: #ea868f;
+            border-color: #ea868f;
+        }
+        
+        [data-bs-theme="dark"] .btn-outline-danger:hover {
+            color: #000;
+            background-color: #ea868f;
+            border-color: #ea868f;
+        }
+        
+        [data-bs-theme="dark"] .form-control {
+            background-color: #2d2d2d;
+            border-color: #495057;
+            color: #e9ecef;
+        }
+        
+        [data-bs-theme="dark"] .form-control:focus {
+            background-color: #2d2d2d;
+            border-color: #6ea8fe;
+            color: #e9ecef;
+            box-shadow: 0 0 0 0.25rem rgba(110, 168, 254, 0.25);
+        }
+        
+        [data-bs-theme="dark"] .form-select {
+            background-color: #2d2d2d;
+            border-color: #495057;
+            color: #e9ecef;
+        }
+        
+        [data-bs-theme="dark"] .form-select:focus {
+            border-color: #6ea8fe;
+            box-shadow: 0 0 0 0.25rem rgba(110, 168, 254, 0.25);
+        }
+        
+        [data-bs-theme="dark"] .dropdown-menu {
+            background-color: #2d2d2d;
+            border-color: #495057;
+        }
+        
+        [data-bs-theme="dark"] .dropdown-item {
+            color: #e9ecef;
+        }
+        
+        [data-bs-theme="dark"] .dropdown-item:hover {
+            background-color: #495057;
+            color: #fff;
+        }
+        
+        [data-bs-theme="dark"] .badge {
+            --bs-badge-color: #000;
+        }
+        
+        [data-bs-theme="dark"] .badge.bg-secondary {
+            --bs-badge-bg: #6c757d;
+        }
+        
+        [data-bs-theme="dark"] .pagination .page-link {
+            background-color: #2d2d2d;
+            border-color: #495057;
+            color: #6ea8fe;
+        }
+        
+        [data-bs-theme="dark"] .pagination .page-link:hover {
+            background-color: #495057;
+            border-color: #6ea8fe;
+            color: #fff;
+        }
+        
+        [data-bs-theme="dark"] .pagination .page-item.active .page-link {
+            background-color: #6ea8fe;
+            border-color: #6ea8fe;
+            color: #000;
+        }
+        
+        [data-bs-theme="dark"] .swipe-hint {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #adb5bd;
+        }
+        
+        [data-bs-theme="dark"] .text-muted {
+            color: #adb5bd !important;
+        }
+        
+        [data-bs-theme="dark"] .alert-primary {
+            background-color: rgba(110, 168, 254, 0.1);
+            border-color: rgba(110, 168, 254, 0.2);
+            color: #6ea8fe;
         }
     </style>
 </head>
@@ -151,7 +338,7 @@
                         </li>
                         {% if current_user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('devices') }}">Пристрої</a>
+                            <a class="nav-link" href="{{ url_for('devices.devices') }}">Пристрої</a>
                         </li>
                         {% endif %}
                     </ul>
@@ -163,16 +350,14 @@
                                     Адміністрування
                                 </a>
                                 <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">Дашборд</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">Користувачі</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_cities') }}">Міста</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_user_activity') }}">Журнал дій</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_dashboard') }}">Дашборд</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_users') }}">Користувачі</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_cities') }}">Міста</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_user_activity') }}">Журнал дій</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('import_excel') }}">Імпорт пристроїв</a></li>
+                                    <li><a class="dropdown-item" href="{{ url_for('devices.import_excel') }}">Імпорт пристроїв</a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_backup') }}">
-                                        <i class="bi bi-shield-lock"></i> Резервне копіювання та відновлення
-                                    </a></li>
+
                                 </ul>
                             </li>
                             {% endif %}
@@ -194,7 +379,7 @@
                                 <a class="nav-link" href="#">{{ current_user.username }}</a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('logout') }}">Вихід</a>
+                                <a class="nav-link" href="{{ url_for('auth.logout') }}">Вихід</a>
                             </li>
                         {% else %}
                             <li class="nav-item">
@@ -207,7 +392,7 @@
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('login') }}">Вхід</a>
+                                <a class="nav-link" href="{{ url_for('auth.login') }}">Вхід</a>
                             </li>
                         {% endif %}
                     </ul>
@@ -325,4 +510,4 @@
         });
     </script>
 </body>
-</html> 
+</html>

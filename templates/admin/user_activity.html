@@ -49,7 +49,7 @@
             {% if page %}
                 {% if page != activities.page %}
                     <li class="page-item">
-                        <a class="page-link" href="{{ url_for('admin_user_activity', page=page) }}">{{ page }}</a>
+                        <a class="page-link" href="{{ url_for('admin.admin_user_activity', page=page) }}">{{ page }}</a>
                     </li>
                 {% else %}
                     <li class="page-item active">
@@ -66,4 +66,4 @@
 </nav>
 {% endif %}
 
-{% endblock %} 
+{% endblock %}

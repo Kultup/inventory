@@ -52,18 +52,18 @@
                     <p>Рекомендується використовувати наклейки або спеціальний папір для друку.</p>
                 </div>
                 <button class="btn btn-primary" onclick="window.print();">Друкувати</button>
-                <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-secondary">Повернутися до деталей</a>
+                <a href="{{ url_for('devices.device_detail', device_id=device.id) }}" class="btn btn-secondary">Повернутися до деталей</a>
             </div>
         </div>
     </div>
     
     <div class="print-container">
         <div class="qr-card">
-            <img src="{{ url_for('device_qrcode', device_id=device.id) }}" class="qr-code-img" alt="QR-код">
+            <img src="{{ url_for('devices.device_qrcode', device_id=device.id) }}" class="qr-code-img" alt="QR-код">
             <div class="inv-number">{{ device.inventory_number }}</div>
             <div class="device-info">{{ device.name }}</div>
             <div class="device-info">{{ device.type }}</div>
         </div>
     </div>
 </body>
-</html> 
+</html>

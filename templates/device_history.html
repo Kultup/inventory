@@ -4,7 +4,7 @@
 <div class="mb-3">
     <h2>Історія змін пристрою: {{ device.name }}</h2>
     <p><strong>Інвентарний номер:</strong> {{ device.inventory_number }}</p>
-    <a href="{{ url_for('device_detail', device_id=device.id) }}" class="btn btn-primary">Повернутися до деталей</a>
+    <a href="{{ url_for('devices.device_detail', device_id=device.id) }}" class="btn btn-primary">Повернутися до деталей</a>
 </div>
 
 <div class="card">
@@ -99,4 +99,4 @@
         margin-bottom: 0.25rem;
     }
 </style>
-{% endblock %} 
+{% endblock %}

@@ -2,7 +2,7 @@
 
 {% block content %}
 <h2>Керування містами</h2>
-<a href="{{ url_for('admin_add_city') }}" class="btn btn-primary mb-3">Додати нове місто</a>
+<a href="{{ url_for('admin.admin_add_city') }}" class="btn btn-primary mb-3">Додати нове місто</a>
 
 <div class="table-responsive">
     <table class="table table-striped">
@@ -23,9 +23,9 @@
                 <td>{{ city.devices|length }}</td>
                 <td>{{ city.users|length }}</td>
                 <td>
-                    <a href="{{ url_for('admin_edit_city', city_id=city.id) }}" class="btn btn-sm btn-info">Редагувати</a>
+                    <a href="{{ url_for('admin.admin_edit_city', city_id=city.id) }}" class="btn btn-sm btn-info">Редагувати</a>
                     {% if city.devices|length == 0 and city.users|length == 0 %}
-                    <form method="POST" action="{{ url_for('admin_delete_city', city_id=city.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити це місто?');">
+                    <form method="POST" action="{{ url_for('admin.admin_delete_city', city_id=city.id) }}" class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити це місто?');">
                         <button type="submit" class="btn btn-sm btn-danger">Видалити</button>
                     </form>
                     {% else %}
@@ -37,4 +37,4 @@
         </tbody>
     </table>
 </div>
-{% endblock %} 
+{% endblock %}
