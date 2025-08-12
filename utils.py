@@ -59,13 +59,17 @@ def log_user_activity(user_id, action, ip_address=None, url=None):
         db.session.rollback()
         current_app.logger.error(f"Помилка при записі активності користувача: {e}")
 
-def record_device_history(device_id, user_id, action, field=None, old_value=None, new_value=None):
+def record_device_history(device_id, user_id, action, field=None, old_value=None, new_value=None, device=None):
     """Записує історію змін пристрою"""
-    from models import DeviceHistory, db
+    from models import DeviceHistory, Device, db
     
     if device_id is None:
         current_app.logger.error(f"Спроба створити запис історії з NULL device_id: action={action}, user_id={user_id}")
         return
+    
+    # Отримуємо інформацію про пристрій, якщо вона не передана
+    if device is None:
+        device = Device.query.get(device_id)
     
     history = DeviceHistory(
         device_id=device_id,
@@ -73,7 +77,11 @@ def record_device_history(device_id, user_id, action, field=None, old_value=None
         action=action,
         field=field,
         old_value=str(old_value) if old_value is not None else None,
-        new_value=str(new_value) if new_value is not None else None
+        new_value=str(new_value) if new_value is not None else None,
+        device_name=device.name if device else None,
+        device_inventory_number=device.inventory_number if device else None,
+        device_type=device.type if device else None,
+        device_serial_number=device.serial_number if device else None
     )
     db.session.add(history)
     try:

@@ -1,38 +1,187 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="jumbotron">
-    <h1 class="display-4">Ласкаво просимо до системи інвентаризації</h1>
-    <p class="lead">Ця система допоможе вам керувати інвентарем техніки та пристроїв.</p>
-    <hr class="my-4">
-    
-    {% if current_user.is_authenticated %}
-    <p>Ви можете додавати нові пристрої, переглядати існуючі та керувати їх статусом.</p>
-    <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary btn-lg" href="{{ url_for('devices.devices') }}" role="button">Переглянути пристрої</a>
-        {# <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
-            <i class="bi bi-book-half"></i> Документація
-        </a> #}
-    </div>
-    {% else %}
-    <p>Будь ласка, увійдіть до системи для отримання доступу до функцій інвентаризації.</p>
-    <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-primary btn-lg" href="{{ url_for('auth.login') }}" role="button">Увійти до системи</a>
-        {# <a class="btn btn-outline-primary btn-lg" href="{{ url_for('wiki') }}" role="button">
-            <i class="bi bi-book-half"></i> Документація
-        </a> #}
-    </div>
-    {% endif %}
-</div>
-
-<div class="mt-4 p-4 bg-light rounded shadow-sm">
-    <div class="d-flex align-items-center">
-        <i class="bi bi-info-circle text-primary fs-1 me-3"></i>
-        <div>
-            <h3>Нова документація доступна!</h3>
-            <p>Ми додали розділ Вікі з детальними інструкціями щодо використання системи інвентаризації. Дізнайтеся про всі можливості системи!</p>
-            {# <a href="{{ url_for('wiki') }}" class="btn btn-sm btn-primary">Перейти до Вікі</a> #}
+<div class="container-fluid">
+    <!-- Заголовок -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="text-center">
+                <h1 class="display-4 mb-3">
+                    <i class="bi bi-boxes text-primary"></i>
+                    Система інвентаризації
+                </h1>
+                <p class="lead text-muted">Управління обладнанням та інвентарем</p>
+            </div>
         </div>
     </div>
+
+    <!-- Швидкі дії -->
+    {% if current_user.is_authenticated %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-lightning-charge"></i>
+                        Швидкі дії
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <a href="{{ url_for('devices.add_device') }}" class="btn btn-primary btn-lg w-100">
+                                <i class="bi bi-plus-circle mb-2 d-block" style="font-size: 2rem;"></i>
+                                Додати пристрій
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('devices.devices') }}" class="btn btn-info btn-lg w-100">
+                                <i class="bi bi-list-ul mb-2 d-block" style="font-size: 2rem;"></i>
+                                Переглянути пристрої
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{{ url_for('devices.export_excel') }}" class="btn btn-success btn-lg w-100">
+                                <i class="bi bi-file-earmark-excel mb-2 d-block" style="font-size: 2rem;"></i>
+                                Експорт в Excel
+                            </a>
+                        </div>
+                        {% if current_user.is_admin %}
+                        <div class="col-md-3">
+                            <a href="{{ url_for('admin.admin_dashboard') }}" class="btn btn-warning btn-lg w-100">
+                                <i class="bi bi-gear mb-2 d-block" style="font-size: 2rem;"></i>
+                                Адміністрування
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Статистика -->
+    {% if current_user.is_authenticated %}
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Всього пристроїв</h5>
+                            <h2 class="mb-0">{{ total_devices or 0 }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-laptop" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">В роботі</h5>
+                            <h2 class="mb-0">{{ active_devices or 0 }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-check-circle" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">На ремонті</h5>
+                            <h2 class="mb-0">{{ repair_devices or 0 }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-tools" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Списано</h5>
+                            <h2 class="mb-0">{{ decommissioned_devices or 0 }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-x-circle" style="font-size: 3rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Інформаційні блоки -->
+    <div class="row">
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle"></i>
+                        Про систему
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>Система інвентаризації призначена для обліку та управління IT-обладнанням організації.</p>
+                    <ul class="list-unstyled">
+                        <li><i class="bi bi-check text-success"></i> Облік пристроїв та обладнання</li>
+                        <li><i class="bi bi-check text-success"></i> Генерація QR-кодів</li>
+                        <li><i class="bi bi-check text-success"></i> Експорт/імпорт даних</li>
+                        <li><i class="bi bi-check text-success"></i> Історія змін</li>
+                        <li><i class="bi bi-check text-success"></i> Друк інвентарних номерів</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-question-circle"></i>
+                        Як користуватися
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ol>
+                        <li><strong>Додавання пристроїв:</strong> Використовуйте кнопку "Додати пристрій" для реєстрації нового обладнання</li>
+                        <li><strong>Перегляд списку:</strong> У розділі "Переглянути пристрої" можна знайти та відфільтрувати обладнання</li>
+                        <li><strong>QR-коди:</strong> Кожен пристрій має унікальний QR-код для швидкого доступу</li>
+                        <li><strong>Експорт даних:</strong> Завантажте дані у форматі Excel для звітності</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if not current_user.is_authenticated %}
+    <!-- Блок для неавторизованих користувачів -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                <h4><i class="bi bi-info-circle"></i> Увійдіть до системи</h4>
+                <p>Для роботи з системою інвентаризації необхідно авторизуватися.</p>
+                <a href="{{ url_for('auth.login') }}" class="btn btn-primary">
+                    <i class="bi bi-box-arrow-in-right"></i> Увійти
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

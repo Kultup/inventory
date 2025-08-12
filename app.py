@@ -53,7 +53,25 @@ app.register_blueprint(admin_bp)
 # Головна сторінка
 @app.route('/')
 def index():
-    return render_template('index.html')
+    from flask_login import current_user
+    from models import Device
+    
+    # Статистика для авторизованих користувачів
+    stats = {}
+    if current_user.is_authenticated:
+        # Якщо користувач адміністратор - показуємо всі дані
+        if current_user.is_admin:
+            base_query = Device.query
+        else:
+            # Звичайні користувачі бачать тільки дані свого міста
+            base_query = Device.query.filter_by(city_id=current_user.city_id)
+        
+        stats['total_devices'] = base_query.count()
+        stats['active_devices'] = base_query.filter_by(status='В роботі').count()
+        stats['repair_devices'] = base_query.filter_by(status='На ремонті').count()
+        stats['decommissioned_devices'] = base_query.filter_by(status='Списано').count()
+    
+    return render_template('index.html', **stats)
 
 # Маршрут для перемикання теми
 @app.route('/toggle-theme')

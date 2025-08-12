@@ -287,9 +287,6 @@ def delete_device(device_id):
     if not current_user.is_admin and device.city_id != current_user.city_id:
         abort(403)
     
-    # Записуємо історію видалення
-    record_device_history(device.id, current_user.id, 'delete')
-    
     # Видаляємо фотографії пристрою з файлової системи
     for photo in device.photos:
         try:
@@ -297,6 +294,9 @@ def delete_device(device_id):
         except:
             # Якщо файл не знайдено, просто продовжуємо
             pass
+    
+    # Записуємо історію видалення ПЕРЕД видаленням пристрою
+    record_device_history(device.id, current_user.id, 'delete', device=device)
     
     # Видаляємо пристрій (каскадне видалення також видалить записи фото)
     db.session.delete(device)
@@ -386,7 +386,44 @@ def device_history(device_id):
         abort(403)
     
     history = DeviceHistory.query.filter_by(device_id=device_id).order_by(DeviceHistory.timestamp.desc()).all()
+    
+    # Налагоджувальна інформація
+    current_app.logger.info(f"Device ID: {device_id}, History count: {len(history)}")
+    for h in history:
+        current_app.logger.info(f"History: {h.action}, {h.field}, {h.timestamp}")
+    
     return render_template('device_history.html', device=device, history=history)
+
+@devices_bp.route('/history/<int:device_id>')
+@login_required
+def device_history_by_id(device_id):
+    """Перегляд історії пристрою за ID (навіть якщо пристрій видалений)"""
+    
+    # Отримуємо історію для цього device_id
+    history = DeviceHistory.query.filter_by(device_id=device_id).order_by(DeviceHistory.timestamp.desc()).all()
+    
+    if not history:
+        abort(404)
+    
+    # Перевіряємо права доступу на основі першого запису історії
+    first_history = history[0]
+    device = Device.query.get(device_id)  # Може бути None для видалених пристроїв
+    
+    # Якщо пристрій існує, перевіряємо права як зазвичай
+    if device and not current_user.is_admin and device.city_id != current_user.city_id:
+        abort(403)
+    
+    # Якщо пристрій видалений, створюємо об'єкт з збереженої інформації
+    if not device and first_history:
+        device = type('Device', (), {
+            'id': device_id,
+            'name': first_history.device_name,
+            'inventory_number': first_history.device_inventory_number,
+            'type': first_history.device_type,
+            'serial_number': first_history.device_serial_number
+        })()
+    
+    return render_template('device_history.html', device=device, history=history, is_deleted=not Device.query.get(device_id))
 
 @devices_bp.route('/device/<int:device_id>/qrcode')
 @login_required

@@ -44,7 +44,7 @@ class Device(db.Model):
     
     # Зв'язки
     photos = db.relationship('DevicePhoto', backref='device', lazy=True, cascade='all, delete-orphan')
-    histories = db.relationship('DeviceHistory', backref='device', lazy=True, cascade='all, delete-orphan')
+    histories = db.relationship('DeviceHistory', backref='device', lazy=True)
     
     def update_next_maintenance(self):
         """Оновлює дату наступного обслуговування на основі останнього обслуговування та інтервалу"""
@@ -63,13 +63,19 @@ class DevicePhoto(db.Model):
 
 class DeviceHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    device_id = db.Column(db.Integer, db.ForeignKey('device.id'), nullable=False)
+    device_id = db.Column(db.Integer, db.ForeignKey('device.id'), nullable=True)  # Може бути NULL для видалених пристроїв
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     action = db.Column(db.String(50), nullable=False)
     field = db.Column(db.String(50))
     old_value = db.Column(db.Text)
     new_value = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Додаткові поля для збереження інформації про видалені пристрої
+    device_name = db.Column(db.String(100))
+    device_inventory_number = db.Column(db.String(20))
+    device_type = db.Column(db.String(50))
+    device_serial_number = db.Column(db.String(100))
 
 class UserActivity(db.Model):
     id = db.Column(db.Integer, primary_key=True)
