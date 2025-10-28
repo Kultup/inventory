@@ -1,194 +1,116 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h2>Панель адміністратора</h2>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-speedometer2"></i> Панель адміністратора</h2>
+    </div>
 
-<!-- Загальна статистика -->
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <h5 class="card-title">Всього пристроїв</h5>
-                <h1 class="display-4">{{ total_devices }}</h1>
+    <!-- Загальна статистика -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title text-uppercase mb-0">Всього пристроїв</h6>
+                            <h2 class="mb-0">{{ total_devices }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-laptop" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title text-uppercase mb-0">Користувачів</h6>
+                            <h2 class="mb-0">{{ total_users }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-people" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title text-uppercase mb-0">Міст</h6>
+                            <h2 class="mb-0">{{ total_cities }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-geo-alt" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title text-uppercase mb-0">Нові (30 днів)</h6>
+                            <h2 class="mb-0">{{ new_devices_count }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="bi bi-calendar-plus" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <h5 class="card-title">Всього користувачів</h5>
-                <h1 class="display-4">{{ total_users }}</h1>
+
+    <!-- Графіки -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body" style="height: 400px;">
+                    <canvas id="devicesStatusChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-body" style="height: 400px;">
+                    <canvas id="devicesTypeChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
-    <div class="col-md-4">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <h5 class="card-title">Всього міст</h5>
-                <h1 class="display-4">{{ total_cities }}</h1>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-body" style="height: 350px;">
+                    <canvas id="devicesMonthChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-body" style="height: 350px;">
+                    <canvas id="devicesCityChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
 
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                Розподіл пристроїв за містами
-            </div>
-            <div class="card-body">
-                <canvas id="devicesByCityChart"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                Розподіл пристроїв за типом
-            </div>
-            <div class="card-body">
-                <canvas id="devicesByTypeChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                Розподіл пристроїв за статусом
-            </div>
-            <div class="card-body">
-                <canvas id="devicesByStatusChart"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">
-                Нові пристрої за місяцями
-            </div>
-            <div class="card-body">
-                <canvas id="devicesByMonthChart"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card mt-4">
-    <div class="card-header">
-        Статистика за останні 30 днів
-    </div>
-    <div class="card-body">
-        <h3>Додано нових пристроїв: <span class="badge bg-primary">{{ new_devices_count }}</span></h3>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Графік розподілу за містами
-        const cityData = {
-            labels: [{% for city, count in devices_by_city %}'{{ city }}',{% endfor %}],
-            datasets: [{
-                label: 'Кількість пристроїв',
-                data: [{% for city, count in devices_by_city %}{{ count }},{% endfor %}],
-                backgroundColor: [
-                    'rgba(54, 162, 235, 0.6)',
-                    'rgba(255, 99, 132, 0.6)',
-                    'rgba(255, 206, 86, 0.6)',
-                    'rgba(75, 192, 192, 0.6)',
-                    'rgba(153, 102, 255, 0.6)',
-                    'rgba(255, 159, 64, 0.6)'
-                ],
-                borderWidth: 1
-            }]
-        };
-        new Chart(document.getElementById('devicesByCityChart'), {
-            type: 'pie',
-            data: cityData,
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                    }
-                }
-            }
-        });
-
-        // Графік розподілу за типом
-        const typeData = {
-            labels: [{% for type, count in devices_by_type %}'{{ type }}',{% endfor %}],
-            datasets: [{
-                label: 'Кількість пристроїв',
-                data: [{% for type, count in devices_by_type %}{{ count }},{% endfor %}],
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                borderWidth: 1
-            }]
-        };
-        new Chart(document.getElementById('devicesByTypeChart'), {
-            type: 'bar',
-            data: typeData,
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-
-        // Графік розподілу за статусом
-        const statusData = {
-            labels: [{% for status, count in devices_by_status %}'{{ status }}',{% endfor %}],
-            datasets: [{
-                label: 'Кількість пристроїв',
-                data: [{% for status, count in devices_by_status %}{{ count }},{% endfor %}],
-                backgroundColor: [
-                    'rgba(54, 162, 235, 0.6)',
-                    'rgba(255, 99, 132, 0.6)',
-                    'rgba(255, 206, 86, 0.6)',
-                    'rgba(75, 192, 192, 0.6)'
-                ],
-                borderWidth: 1
-            }]
-        };
-        new Chart(document.getElementById('devicesByStatusChart'), {
-            type: 'doughnut',
-            data: statusData,
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                    }
-                }
-            }
-        });
-
-        // Графік нових пристроїв за місяцями
-        const monthData = {
-            labels: [{% for month, count in devices_by_month %}'{{ month }}',{% endfor %}],
-            datasets: [{
-                label: 'Нові пристрої',
-                data: [{% for month, count in devices_by_month %}{{ count }},{% endfor %}],
-                fill: false,
-                borderColor: 'rgba(75, 192, 192, 1)',
-                tension: 0.1
-            }]
-        };
-        new Chart(document.getElementById('devicesByMonthChart'), {
-            type: 'line',
-            data: monthData,
-            options: {
-                responsive: true
-            }
-        });
-    });
-</script>
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 {% endblock %} 

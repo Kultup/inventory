@@ -1,5 +1,9 @@
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
+
+# Завантажуємо змінні оточення з .env файлу
+load_dotenv()
 
 class Config:
     """Базова конфігурація"""
@@ -44,11 +48,17 @@ class Config:
     QR_CODE_SIZE = int(os.environ.get('QR_CODE_SIZE', 200))
     QR_CODE_BORDER = int(os.environ.get('QR_CODE_BORDER', 4))
     
+    # Налаштування резервного копіювання
+    BACKUP_FOLDER = os.environ.get('BACKUP_FOLDER') or 'backups'
+    BACKUP_KEEP_DAYS = int(os.environ.get('BACKUP_KEEP_DAYS', 30))
+    BACKUP_AUTO_ENABLED = os.environ.get('BACKUP_AUTO_ENABLED', 'false').lower() == 'true'
+    
     @staticmethod
     def init_app(app):
         """Ініціалізація додатку з конфігурацією"""
         # Створення необхідних директорій
         os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+        os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
 
 
 class DevelopmentConfig(Config):

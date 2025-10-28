@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}QR Сканер{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-qr-code-scan"></i>
+                        Сканер QR-кодів
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <!-- Кнопки управління -->
+                    <div class="mb-3 text-center">
+                        <button id="startButton" class="btn btn-success btn-lg">
+                            <i class="bi bi-camera"></i> Запустити камеру
+                        </button>
+                        <button id="stopButton" class="btn btn-danger btn-lg" style="display: none;">
+                            <i class="bi bi-stop-circle"></i> Зупинити
+                        </button>
+                    </div>
+
+                    <!-- Вибір камери -->
+                    <div class="mb-3" id="cameraSelectDiv" style="display: none;">
+                        <label for="cameraSelect" class="form-label">Оберіть камеру:</label>
+                        <select id="cameraSelect" class="form-select">
+                        </select>
+                    </div>
+
+                    <!-- Відео з камери -->
+                    <div id="reader" class="mb-3" style="display: none; border: 2px solid #ddd; border-radius: 8px;"></div>
+
+                    <!-- Результат сканування -->
+                    <div id="result" class="alert alert-info" style="display: none;">
+                        <h5><i class="bi bi-check-circle"></i> Відскановано:</h5>
+                        <div id="resultText"></div>
+                    </div>
+
+                    <!-- Інформація -->
+                    <div class="alert alert-light">
+                        <h6><i class="bi bi-info-circle"></i> Як використовувати:</h6>
+                        <ol class="mb-0">
+                            <li>Натисніть "Запустити камеру"</li>
+                            <li>Дозвольте доступ до камери</li>
+                            <li>Наведіть камеру на QR-код пристрою</li>
+                            <li>Після сканування ви будете перенаправлені на картку пристрою</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ручне введення -->
+            <div class="card shadow mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-keyboard"></i>
+                        Або введіть ID пристрою вручну
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('devices.device_detail', device_id=0) }}" method="get" id="manualForm">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="manualDeviceId" 
+                                   placeholder="Введіть ID пристрою" required min="1">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="bi bi-search"></i> Знайти
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+let html5QrCode;
+let currentCameraId;
+
+const startButton = document.getElementById('startButton');
+const stopButton = document.getElementById('stopButton');
+const reader = document.getElementById('reader');
+const result = document.getElementById('result');
+const resultText = document.getElementById('resultText');
+const cameraSelectDiv = document.getElementById('cameraSelectDiv');
+const cameraSelect = document.getElementById('cameraSelect');
+const manualForm = document.getElementById('manualForm');
+
+// Функція успішного сканування
+function onScanSuccess(decodedText, decodedResult) {
+    console.log(`Відскановано: ${decodedText}`);
+    
+    resultText.innerHTML = `<pre>${decodedText}</pre>`;
+    result.style.display = 'block';
+    
+    // Спробуємо знайти ID пристрою у відсканованому тексті
+    const idMatch = decodedText.match(/ID:\s*(\d+)/i);
+    
+    if (idMatch && idMatch[1]) {
+        const deviceId = idMatch[1];
+        
+        // Показуємо повідомлення
+        resultText.innerHTML += `<p class="mt-2"><strong>Знайдено пристрій ID: ${deviceId}</strong></p>`;
+        resultText.innerHTML += `<div class="spinner-border spinner-border-sm" role="status"></div> Перенаправлення...`;
+        
+        // Зупиняємо сканер
+        stopScanning();
+        
+        // Перенаправлення через 1.5 секунди
+        setTimeout(() => {
+            window.location.href = `/device/${deviceId}`;
+        }, 1500);
+    } else {
+        resultText.innerHTML += `<p class="text-warning mt-2">ID пристрою не знайдено в QR-коді</p>`;
+    }
+}
+
+// Функція помилки сканування
+function onScanError(errorMessage) {
+    // Ігноруємо часті помилки "не знайдено QR код"
+    // console.log(errorMessage);
+}
+
+// Запуск сканера
+async function startScanning() {
+    try {
+        if (!html5QrCode) {
+            html5QrCode = new Html5Qrcode("reader");
+        }
+        
+        // Отримуємо список камер
+        const devices = await Html5Qrcode.getCameras();
+        
+        if (devices && devices.length) {
+            // Заповнюємо список камер
+            cameraSelect.innerHTML = '';
+            devices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.id;
+                option.text = device.label || `Камера ${index + 1}`;
+                cameraSelect.appendChild(option);
+            });
+            
+            // Показуємо вибір камери якщо їх більше однієї
+            if (devices.length > 1) {
+                cameraSelectDiv.style.display = 'block';
+            }
+            
+            // Використовуємо задню камеру за замовчуванням (для мобільних)
+            const backCamera = devices.find(d => d.label.toLowerCase().includes('back')) || devices[0];
+            currentCameraId = backCamera.id;
+            cameraSelect.value = currentCameraId;
+            
+            // Запускаємо сканування
+            await html5QrCode.start(
+                currentCameraId,
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 }
+                },
+                onScanSuccess,
+                onScanError
+            );
+            
+            reader.style.display = 'block';
+            startButton.style.display = 'none';
+            stopButton.style.display = 'inline-block';
+            result.style.display = 'none';
+        } else {
+            alert('Камеру не знайдено. Перевірте дозволи браузера.');
+        }
+    } catch (err) {
+        console.error('Помилка запуску камери:', err);
+        alert(`Помилка: ${err}. Надайте дозвіл на використання камери.`);
+    }
+}
+
+// Зупинка сканера
+async function stopScanning() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        try {
+            await html5QrCode.stop();
+            reader.style.display = 'none';
+            startButton.style.display = 'inline-block';
+            stopButton.style.display = 'none';
+        } catch (err) {
+            console.error('Помилка зупинки камери:', err);
+        }
+    }
+}
+
+// Зміна камери
+cameraSelect.addEventListener('change', async function() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        await stopScanning();
+        currentCameraId = this.value;
+        await startScanning();
+    }
+});
+
+// Обробники кнопок
+startButton.addEventListener('click', startScanning);
+stopButton.addEventListener('click', stopScanning);
+
+// Ручне введення
+manualForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const deviceId = document.getElementById('manualDeviceId').value;
+    if (deviceId) {
+        window.location.href = `/device/${deviceId}`;
+    }
+});
+
+// Зупиняємо сканер при виході зі сторінки
+window.addEventListener('beforeunload', function() {
+    if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop();
+    }
+});
+</script>
+{% endblock %}
+

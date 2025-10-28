@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Співробітники</h2>
+    <div>
+        <a href="{{ url_for('employees.add_employee') }}" class="btn btn-primary">
+            <i class="bi bi-person-plus"></i> Додати співробітника
+        </a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if employees %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Прізвище, Ім'я</th>
+                        <th>Посада</th>
+                        <th>Відділ</th>
+                        <th>Телефон</th>
+                        <th>Email</th>
+                        <th>Місто</th>
+                        <th>Статус</th>
+                        <th>Пристрої</th>
+                        <th>Дії</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for employee in employees %}
+                    <tr>
+                        <td>
+                            <strong>{{ employee.full_name }}</strong>
+                            {% if employee.middle_name %}<br><small class="text-muted">{{ employee.short_name }}</small>{% endif %}
+                        </td>
+                        <td>{{ employee.position or '-' }}</td>
+                        <td>{{ employee.department or '-' }}</td>
+                        <td>
+                            {% if employee.phone %}
+                                <a href="tel:{{ employee.phone }}">{{ employee.phone }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if employee.email %}
+                                <a href="mailto:{{ employee.email }}">{{ employee.email }}</a>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>{{ employee.city.name if employee.city else '-' }}</td>
+                        <td>
+                            {% if employee.is_active %}
+                                <span class="badge bg-success">Активний</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Неактивний</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-info">{{ employee.devices|length }}</span>
+                        </td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="{{ url_for('employees.employee_detail', employee_id=employee.id) }}" 
+                                   class="btn btn-sm btn-outline-primary" title="Деталі">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('employees.edit_employee', employee_id=employee.id) }}" 
+                                   class="btn btn-sm btn-outline-info" title="Редагувати">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-4">
+            <i class="bi bi-inbox display-4 d-block mb-2"></i>
+            Співробітників не знайдено
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show mt-3" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+{% endblock %}
+

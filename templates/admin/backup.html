@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+
+{% block title %}Резервне копіювання{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="bi bi-server"></i> Резервне копіювання</h2>
+                <form method="POST" action="{{ url_for('admin.admin_create_backup') }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cloud-arrow-down"></i> Створити резервну копію
+                    </button>
+                </form>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Список резервних копій</h5>
+                </div>
+                <div class="card-body">
+                    {% if backups %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Файл</th>
+                                        <th>Розмір</th>
+                                        <th>Дата створення</th>
+                                        <th class="text-end">Дії</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for backup in backups %}
+                                    <tr>
+                                        <td>
+                                            <i class="bi bi-file-earmark-zip"></i>
+                                            {{ backup.filename }}
+                                        </td>
+                                        <td>
+                                            {% if backup.size < 1024 %}
+                                                {{ backup.size }} B
+                                            {% elif backup.size < 1024 * 1024 %}
+                                                {{ "%.2f"|format(backup.size / 1024) }} KB
+                                            {% else %}
+                                                {{ "%.2f"|format(backup.size / (1024 * 1024)) }} MB
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ backup.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                                        <td class="text-end">
+                                            <a href="{{ url_for('admin.admin_download_backup', filename=backup.filename) }}" 
+                                               class="btn btn-sm btn-success">
+                                                <i class="bi bi-download"></i> Завантажити
+                                            </a>
+                                            <form method="POST" 
+                                                  action="{{ url_for('admin.admin_delete_backup', filename=backup.filename) }}" 
+                                                  class="d-inline"
+                                                  onsubmit="return confirm('Ви впевнені, що хочете видалити цю резервну копію?');">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                                                <button type="submit" class="btn btn-sm btn-danger">
+                                                    <i class="bi bi-trash"></i> Видалити
+                                                </button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Резервні копії відсутні. Створіть першу резервну копію.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Інформація</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Автоматичне резервне копіювання:</strong> 
+                        {% if config.BACKUP_AUTO_ENABLED %}
+                            <span class="badge bg-success">Увімкнено</span>
+                        {% else %}
+                            <span class="badge bg-secondary">Вимкнено</span>
+                        {% endif %}
+                    </p>
+                    <p><strong>Період зберігання backup:</strong> {{ config.BACKUP_KEEP_DAYS }} днів</p>
+                    <p class="mb-0"><strong>Директорія backup:</strong> <code>{{ config.BACKUP_FOLDER }}</code></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

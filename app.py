@@ -2,7 +2,10 @@ from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from flask_migrate import Migrate
 from datetime import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 import os
 import re
@@ -19,6 +22,7 @@ app.config.from_object(DevelopmentConfig)
 
 # Ініціалізація розширень
 db.init_app(app)
+migrate = Migrate(app, db)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
@@ -27,6 +31,8 @@ csrf = CSRFProtect(app)
 # Створення директорій, якщо вони не існують
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
+if not os.path.exists(app.config['BACKUP_FOLDER']):
+    os.makedirs(app.config['BACKUP_FOLDER'])
 
 
 
@@ -45,10 +51,14 @@ def load_user(user_id):
 from blueprints.auth import auth_bp
 from blueprints.devices import devices_bp
 from blueprints.admin import admin_bp
+from blueprints.api import api_bp
+from blueprints.employees import employees_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(devices_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(api_bp)
+app.register_blueprint(employees_bp)
 
 # Головна сторінка
 @app.route('/')
@@ -109,6 +119,47 @@ def create_admin():
         db.session.commit()
         print("Створено адміністратора: admin/admin")
 
+# Ініціалізація планувальника задач
+def init_scheduler():
+    """Ініціалізує планувальник для автоматичних задач"""
+    from utils import backup_database, cleanup_old_backups, check_maintenance_reminders
+    
+    scheduler = BackgroundScheduler()
+    
+    # Автоматичний backup щодня о 2:00
+    if app.config.get('BACKUP_AUTO_ENABLED', False):
+        scheduler.add_job(
+            func=lambda: backup_database(app.config['BACKUP_FOLDER']),
+            trigger=CronTrigger(hour=2, minute=0),
+            id='daily_backup',
+            name='Щоденне резервне копіювання',
+            replace_existing=True
+        )
+        
+        # Очищення старих backup щотижня
+        scheduler.add_job(
+            func=lambda: cleanup_old_backups(
+                app.config['BACKUP_FOLDER'], 
+                app.config.get('BACKUP_KEEP_DAYS', 30)
+            ),
+            trigger=CronTrigger(day_of_week=0, hour=3, minute=0),
+            id='cleanup_backups',
+            name='Очищення старих backup',
+            replace_existing=True
+        )
+    
+    # Перевірка обслуговування щодня о 9:00
+    scheduler.add_job(
+        func=check_maintenance_reminders,
+        trigger=CronTrigger(hour=9, minute=0),
+        id='check_maintenance',
+        name='Перевірка обслуговування пристроїв',
+        replace_existing=True
+    )
+    
+    scheduler.start()
+    print("Планувальник задач запущено")
+
 
 
 # Обробка помилок CSRF
@@ -120,5 +171,6 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
         create_admin()
+        init_scheduler()
 
     app.run(debug=True)  # Для розробки

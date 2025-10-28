@@ -312,3 +312,130 @@ def admin_import_settings():
     else:
         flash('Дозволені тільки файли формату JSON', 'danger')
         return redirect(url_for('admin.admin_backup'))
+
+# Backup Management
+@admin_bp.route('/backup/create', methods=['POST'])
+@login_required
+@admin_required
+def admin_create_backup():
+    from utils import backup_database
+    result = backup_database(current_app.config['BACKUP_FOLDER'])
+    if result:
+        flash(f'Резервна копія успішно створена: {result["filename"]}', 'success')
+        log_user_activity(current_user.id, 'Створено резервну копію бази даних', request.remote_addr, request.url)
+    else:
+        flash('Помилка при створенні резервної копії', 'danger')
+    return redirect(url_for('admin.admin_backup'))
+
+@admin_bp.route('/backup')
+@login_required
+@admin_required
+def admin_backup():
+    from utils import get_backup_list
+    backups = get_backup_list(current_app.config['BACKUP_FOLDER'])
+    return render_template('admin/backup.html', backups=backups)
+
+@admin_bp.route('/backup/<filename>/download')
+@login_required
+@admin_required
+def admin_download_backup(filename):
+    from werkzeug.utils import secure_filename as sf
+    backup_path = os.path.join(current_app.config['BACKUP_FOLDER'], sf(filename))
+    
+    if os.path.exists(backup_path) and backup_path.startswith(current_app.config['BACKUP_FOLDER']):
+        return send_file(backup_path, as_attachment=True)
+    else:
+        flash('Файл не знайдено', 'danger')
+        return redirect(url_for('admin.admin_backup'))
+
+@admin_bp.route('/backup/<filename>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_backup(filename):
+    from werkzeug.utils import secure_filename
+    backup_path = os.path.join(current_app.config['BACKUP_FOLDER'], secure_filename(filename))
+    
+    if os.path.exists(backup_path) and backup_path.startswith(current_app.config['BACKUP_FOLDER']):
+        try:
+            os.remove(backup_path)
+            flash('Резервну копію видалено', 'success')
+            log_user_activity(current_user.id, f'Видалено резервну копію: {filename}', request.remote_addr, request.url)
+        except Exception as e:
+            flash(f'Помилка при видаленні: {e}', 'danger')
+    else:
+        flash('Файл не знайдено', 'danger')
+    
+    return redirect(url_for('admin.admin_backup'))
+
+# API для графіків
+@admin_bp.route('/api/chart/devices-by-status')
+@login_required
+@admin_required
+def api_chart_devices_by_status():
+    """Дані для кругової діаграми: розподіл за статусами"""
+    statuses = db.session.query(
+        Device.status, func.count(Device.id)
+    ).group_by(Device.status).all()
+    
+    return jsonify({
+        'labels': [s[0] for s in statuses],
+        'data': [s[1] for s in statuses]
+    })
+
+@admin_bp.route('/api/chart/devices-by-type')
+@login_required
+@admin_required
+def api_chart_devices_by_type():
+    """Дані для барної діаграми: розподіл за типами"""
+    types = db.session.query(
+        Device.type, func.count(Device.id)
+    ).group_by(Device.type).order_by(func.count(Device.id).desc()).limit(10).all()
+    
+    return jsonify({
+        'labels': [t[0] for t in types],
+        'data': [t[1] for t in types]
+    })
+
+@admin_bp.route('/api/chart/devices-by-month')
+@login_required
+@admin_required
+def api_chart_devices_by_month():
+    """Дані для лінійного графіка: динаміка додавання за 12 місяців"""
+    from datetime import datetime, timedelta
+    
+    months_data = []
+    labels = []
+    
+    for i in range(11, -1, -1):
+        start_date = datetime.now().replace(day=1) - timedelta(days=30*i)
+        if i > 0:
+            end_date = datetime.now().replace(day=1) - timedelta(days=30*(i-1))
+        else:
+            end_date = datetime.now()
+        
+        count = Device.query.filter(
+            Device.created_at >= start_date,
+            Device.created_at < end_date
+        ).count()
+        
+        months_data.append(count)
+        labels.append(start_date.strftime('%b %Y'))
+    
+    return jsonify({
+        'labels': labels,
+        'data': months_data
+    })
+
+@admin_bp.route('/api/chart/devices-by-city')
+@login_required
+@admin_required
+def api_chart_devices_by_city():
+    """Дані для діаграми: розподіл за містами"""
+    cities = db.session.query(
+        City.name, func.count(Device.id)
+    ).join(Device).group_by(City.name).all()
+    
+    return jsonify({
+        'labels': [c[0] for c in cities],
+        'data': [c[1] for c in cities]
+    })

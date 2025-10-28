@@ -12,8 +12,8 @@ import qrcode
 from PIL import Image
 
 # Імпорти моделей та функцій
-from models import Device, DevicePhoto, DeviceHistory, City, User, db
-from utils import allowed_file, record_device_history, generate_inventory_number, log_user_activity
+from models import Device, DevicePhoto, DeviceHistory, City, User, db, RepairExpense
+from utils import allowed_file, record_device_history, generate_inventory_number, log_user_activity, optimize_image
 
 devices_bp = Blueprint('devices', __name__)
 
@@ -170,7 +170,14 @@ def add_device():
                     unique_filename = f"{uuid.uuid4()}_{filename}"
                     
                     # Зберігаємо файл
-                    photo.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
+                    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+                    photo.save(file_path)
+                    
+                    # Оптимізуємо зображення
+                    optimized_path = optimize_image(file_path)
+                    if optimized_path and optimized_path != file_path:
+                        # Якщо файл було конвертовано (наприклад PNG->JPG)
+                        unique_filename = os.path.basename(optimized_path)
                     
                     # Створюємо запис у базі даних
                     device_photo = DevicePhoto(
@@ -266,6 +273,35 @@ def edit_device(device_id):
         # Оновлюємо дату наступного обслуговування
         device.update_next_maintenance()
         
+        # Обробляємо фінансові дані
+        purchase_price = request.form.get('purchase_price', type=float)
+        if purchase_price != device.purchase_price:
+            old_value = str(device.purchase_price) if device.purchase_price else "Не вказано"
+            record_device_history(device.id, current_user.id, 'update', 'Вартість покупки', old_value, str(purchase_price))
+            device.purchase_price = purchase_price
+        
+        purchase_date_str = request.form.get('purchase_date', '')
+        if purchase_date_str:
+            try:
+                purchase_date = datetime.strptime(purchase_date_str, '%Y-%m-%d').date()
+                if purchase_date != device.purchase_date:
+                    old_value = device.purchase_date.strftime('%Y-%m-%d') if device.purchase_date else "Не вказано"
+                    record_device_history(device.id, current_user.id, 'update', 'Дата покупки', old_value, purchase_date_str)
+                    device.purchase_date = purchase_date
+            except ValueError:
+                pass
+        else:
+            if device.purchase_date:
+                old_value = device.purchase_date.strftime('%Y-%m-%d')
+                record_device_history(device.id, current_user.id, 'update', 'Дата покупки', old_value, "Не вказано")
+                device.purchase_date = None
+        
+        depreciation_rate = request.form.get('depreciation_rate', type=float)
+        if depreciation_rate != device.depreciation_rate:
+            old_value = str(device.depreciation_rate) if device.depreciation_rate else "20.0"
+            record_device_history(device.id, current_user.id, 'update', 'Відсоток амортизації', old_value, str(depreciation_rate))
+            device.depreciation_rate = depreciation_rate
+        
         db.session.commit()
         flash('Пристрій успішно оновлено!')
         return redirect(url_for('devices.device_detail', device_id=device.id))
@@ -324,7 +360,14 @@ def add_device_photo(device_id):
             unique_filename = f"{uuid.uuid4()}_{filename}"
             
             # Зберігаємо файл
-            photo.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
+            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+            photo.save(file_path)
+            
+            # Оптимізуємо зображення
+            optimized_path = optimize_image(file_path)
+            if optimized_path and optimized_path != file_path:
+                # Якщо файл було конвертовано
+                unique_filename = os.path.basename(optimized_path)
             
             # Створюємо запис у базі даних
             device_photo = DevicePhoto(
@@ -361,6 +404,55 @@ def delete_device_photo(photo_id):
     db.session.commit()
     
     flash('Фото успішно видалено!')
+    return redirect(url_for('devices.device_detail', device_id=device.id))
+
+@devices_bp.route('/device/<int:device_id>/add-repair-expense', methods=['POST'])
+@login_required
+def add_repair_expense(device_id):
+    """Додавання витрат на ремонт"""
+    device = Device.query.get_or_404(device_id)
+    
+    # Перевіряємо доступ
+    if not current_user.is_admin and device.city_id != current_user.city_id:
+        abort(403)
+    
+    try:
+        expense = RepairExpense(
+            device_id=device_id,
+            amount=request.form.get('amount', type=float),
+            description=request.form.get('description', ''),
+            repair_date=datetime.strptime(request.form['repair_date'], '%Y-%m-%d').date(),
+            invoice_number=request.form.get('invoice_number', '')
+        )
+        db.session.add(expense)
+        db.session.commit()
+        
+        flash('Витрати на ремонт успішно додано!', 'success')
+        log_user_activity(current_user.id, f'Додано витрати на ремонт: {expense.amount} для {device.name}', request.remote_addr, request.url)
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Помилка при додаванні витрат: {str(e)}', 'error')
+    
+    return redirect(url_for('devices.device_detail', device_id=device_id))
+
+@devices_bp.route('/device/repair-expense/<int:expense_id>/delete', methods=['POST'])
+@login_required
+def delete_repair_expense(expense_id):
+    """Видалення витрат на ремонт"""
+    expense = RepairExpense.query.get_or_404(expense_id)
+    device = expense.device
+    
+    # Перевіряємо доступ
+    if not current_user.is_admin and device.city_id != current_user.city_id:
+        abort(403)
+    
+    amount = expense.amount
+    db.session.delete(expense)
+    db.session.commit()
+    
+    flash('Витрати на ремонт успішно видалено!', 'success')
+    log_user_activity(current_user.id, f'Видалено витрати на ремонт: {amount} для {device.name}', request.remote_addr, request.url)
+    
     return redirect(url_for('devices.device_detail', device_id=device.id))
 
 @devices_bp.route('/uploads/<filename>')
@@ -690,6 +782,213 @@ def export_excel():
         as_attachment=True,
         download_name=filename
      )
+
+@devices_bp.route('/device/<int:device_id>/export_pdf')
+@login_required
+def export_device_pdf(device_id):
+    """Експорт інвентарної картки пристрою в PDF"""
+    device = Device.query.get_or_404(device_id)
+    
+    # Перевіряємо, чи має користувач доступ до цього пристрою
+    if not current_user.is_admin and device.city_id != current_user.city_id:
+        abort(403)
+    
+    from utils_pdf import generate_device_pdf
+    
+    pdf_buffer = generate_device_pdf(device)
+    
+    log_user_activity(current_user.id, f'Експорт PDF пристрою: {device.name}', request.remote_addr, request.url)
+    
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'device_{device.inventory_number}.pdf'
+    )
+
+@devices_bp.route('/devices/export_pdf', methods=['POST'])
+@login_required
+def export_devices_bulk_pdf():
+    """Масовий експорт пристроїв в PDF"""
+    device_ids = request.form.getlist('device_ids', type=int)
+    
+    if not device_ids:
+        flash('Не вибрано жодного пристрою для експорту!', 'warning')
+        return redirect(url_for('devices.devices'))
+    
+    # Отримуємо пристрої відповідно до прав користувача
+    if current_user.is_admin:
+        devices = Device.query.filter(Device.id.in_(device_ids)).all()
+    else:
+        devices = Device.query.filter(
+            Device.id.in_(device_ids),
+            Device.city_id == current_user.city_id
+        ).all()
+    
+    if not devices:
+        flash('Не знайдено пристроїв для експорту!', 'error')
+        return redirect(url_for('devices.devices'))
+    
+    from utils_pdf import generate_bulk_devices_pdf
+    
+    pdf_buffer = generate_bulk_devices_pdf(devices)
+    
+    log_user_activity(current_user.id, f'Масовий експорт PDF: {len(devices)} пристроїв', request.remote_addr, request.url)
+    
+    filename = f'devices_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+    
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
+
+@devices_bp.route('/qr-scanner')
+@login_required
+def qr_scanner():
+    """Сторінка мобільного QR-сканера"""
+    return render_template('qr_scanner.html')
+
+@devices_bp.route('/devices/bulk-update-status', methods=['POST'])
+@login_required
+def bulk_update_status():
+    """Масове оновлення статусу пристроїв"""
+    device_ids = request.form.getlist('device_ids', type=int)
+    new_status = request.form.get('new_status')
+    
+    if not device_ids or not new_status:
+        flash('Не вибрано пристрої або не вказано статус', 'error')
+        return redirect(url_for('devices.devices'))
+    
+    # Отримуємо пристрої відповідно до прав користувача
+    if current_user.is_admin:
+        devices = Device.query.filter(Device.id.in_(device_ids)).all()
+    else:
+        devices = Device.query.filter(
+            Device.id.in_(device_ids),
+            Device.city_id == current_user.city_id
+        ).all()
+    
+    if not devices:
+        flash('Пристрої не знайдено або у вас немає доступу', 'error')
+        return redirect(url_for('devices.devices'))
+    
+    # Оновлюємо статус та записуємо історію
+    updated_count = 0
+    for device in devices:
+        if device.status != new_status:
+            old_status = device.status
+            device.status = new_status
+            record_device_history(device.id, current_user.id, 'update', 'Статус', old_status, new_status)
+            updated_count += 1
+    
+    db.session.commit()
+    
+    flash(f'Статус оновлено для {updated_count} пристрої(в)', 'success')
+    log_user_activity(current_user.id, f'Масове оновлення статусу: {updated_count} пристроїв', request.remote_addr, request.url)
+    
+    return redirect(url_for('devices.devices'))
+
+@devices_bp.route('/devices/bulk-export-excel', methods=['POST'])
+@login_required
+def bulk_export_excel():
+    """Масовий експорт вибраних пристроїв в Excel"""
+    device_ids = request.form.getlist('device_ids', type=int)
+    
+    if not device_ids:
+        flash('Не вибрано жодного пристрою для експорту!', 'warning')
+        return redirect(url_for('devices.devices'))
+    
+    # Отримуємо пристрої
+    if current_user.is_admin:
+        devices = Device.query.filter(Device.id.in_(device_ids)).all()
+    else:
+        devices = Device.query.filter(
+            Device.id.in_(device_ids),
+            Device.city_id == current_user.city_id
+        ).all()
+    
+    if not devices:
+        flash('Пристрої не знайдено', 'error')
+        return redirect(url_for('devices.devices'))
+    
+    # Створюємо Excel файл (використовуємо існуючу функцію)
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.title = "Обрані пристрої"
+    
+    # Заголовки
+    headers = ['ID', 'Назва', 'Тип', 'Серійний номер', 'Інвентарний номер',
+               'Розташування', 'Статус', 'Місто', 'Дата створення', 'Примітки']
+    
+    # Стилі
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_alignment = Alignment(horizontal="center", vertical="center")
+    border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # Записуємо заголовки
+    for col, header in enumerate(headers, 1):
+        cell = sheet.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_alignment
+        cell.border = border
+    
+    # Записуємо дані
+    for row, device in enumerate(devices, 2):
+        data = [
+            device.id,
+            device.name,
+            device.type,
+            device.serial_number,
+            device.inventory_number,
+            device.location,
+            device.status,
+            device.city.name if device.city else '',
+            device.created_at.strftime('%Y-%m-%d %H:%M') if device.created_at else '',
+            device.notes
+        ]
+        
+        for col, value in enumerate(data, 1):
+            cell = sheet.cell(row=row, column=col, value=value)
+            cell.border = border
+            cell.alignment = Alignment(vertical="center")
+    
+    # Автоматично підганяємо ширину
+    for column in sheet.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        sheet.column_dimensions[column_letter].width = adjusted_width
+    
+    # Зберігаємо в буфер
+    output = io.BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    
+    filename = f'selected_devices_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+    
+    log_user_activity(current_user.id, f'Масовий експорт Excel: {len(devices)} пристроїв', request.remote_addr, request.url)
+    
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name=filename
+    )
 
 @devices_bp.route('/devices/bulk_print_inventory', methods=['GET', 'POST'])
 @login_required

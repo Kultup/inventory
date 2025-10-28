@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <h2 class="mb-4">Додати співробітника</h2>
+        
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            
+            <!-- Основна інформація -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-person"></i> Особиста інформація</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="last_name" class="form-label">Прізвище <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="first_name" class="form-label">Ім'я <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="middle_name" class="form-label">По батькові</label>
+                            <input type="text" class="form-control" id="middle_name" name="middle_name">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Робоча інформація -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-briefcase"></i> Робоча інформація</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="position" class="form-label">Посада</label>
+                            <input type="text" class="form-control" id="position" name="position" placeholder="Наприклад: Системний адміністратор">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="department" class="form-label">Відділ</label>
+                            <input type="text" class="form-control" id="department" name="department" placeholder="Наприклад: IT відділ">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Контакти -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-telephone"></i> Контакти</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">Телефон</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" placeholder="+380501234567">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" name="email" placeholder="employee@company.com">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Місто -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-geo-alt"></i> Місто</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="city_id" class="form-label">Місто <span class="text-danger">*</span></label>
+                        <select class="form-select" id="city_id" name="city_id" required>
+                            {% for city in cities %}
+                            <option value="{{ city.id }}" {% if not current_user.is_admin and city.id == current_user.city_id %}selected{% endif %}>{{ city.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Додаткова інформація -->
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h6 class="mb-0"><i class="bi bi-card-text"></i> Додаткова інформація</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Примітки</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3" placeholder="Додаткова інформація про співробітника..."></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-flex gap-2 mb-3">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-lg"></i> Додати співробітника
+                </button>
+                <a href="{{ url_for('employees.employees') }}" class="btn btn-secondary">
+                    <i class="bi bi-x-circle"></i> Скасувати
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+

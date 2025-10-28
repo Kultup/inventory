@@ -105,11 +105,19 @@
 
 <div class="row mb-3">
     <div class="col-md-6 mb-2 mb-md-0">
-        <div class="d-flex flex-wrap">
-            <a href="{{ url_for('devices.bulk_print_inventory') }}" class="btn btn-outline-primary me-2 mb-2">
-                <i class="bi bi-printer"></i> Масовий друк
-            </a>
-
+        <div class="d-flex flex-wrap align-items-center">
+            <span class="me-3" id="selectedCount" style="display: none;">
+                Обрано: <strong id="selectedCountValue">0</strong>
+            </span>
+            <button type="button" class="btn btn-outline-primary me-2 mb-2" id="bulkStatusBtn" style="display: none;">
+                <i class="bi bi-arrow-repeat"></i> Змінити статус
+            </button>
+            <button type="button" class="btn btn-outline-success me-2 mb-2" id="bulkExportExcelBtn" style="display: none;">
+                <i class="bi bi-file-earmark-excel"></i> Експорт вибраних
+            </button>
+            <button type="button" class="btn btn-outline-info me-2 mb-2" id="bulkExportPdfBtn" style="display: none;">
+                <i class="bi bi-file-pdf"></i> PDF вибраних
+            </button>
         </div>
     </div>
     <div class="col-md-6">
@@ -125,7 +133,9 @@
         <table class="table table-striped table-hover">
             <thead class="table-dark">
                 <tr>
-
+                    <th style="width: 40px;">
+                        <input type="checkbox" class="form-check-input" id="selectAll" title="Вибрати всі">
+                    </th>
                     <th>
                         <a href="?{{ request.query_string.decode() | replace('sort=name', '') | replace('order=desc', '') | replace('order=asc', '') }}&sort=name&order={{ 'desc' if sort_by == 'name' and sort_order == 'asc' else 'asc' }}" class="text-white text-decoration-none">
                             Назва
@@ -189,7 +199,9 @@
             <tbody>
                 {% for device in devices %}
                 <tr>
-
+                    <td>
+                        <input type="checkbox" class="form-check-input device-checkbox" value="{{ device.id }}" data-device-id="{{ device.id }}">
+                    </td>
                     <td><strong>{{ device.name }}</strong></td>
                     <td>
                         <span class="badge bg-secondary">{{ device.inventory_number }}</span>
@@ -232,7 +244,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="9" class="text-center text-muted py-4">
+                    <td colspan="10" class="text-center text-muted py-4">
                         <i class="bi bi-inbox display-4 d-block mb-2"></i>
                         Пристрої не знайдені
                     </td>
@@ -326,6 +338,45 @@
 </div>
 {% endif %}
 
+<!-- Модальне вікно для вибору статусу -->
+<div class="modal fade" id="bulkStatusModal" tabindex="-1" aria-labelledby="bulkStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkStatusModalLabel">Зміна статусу пристроїв</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+            </div>
+            <div class="modal-body">
+                <form id="bulkStatusForm" method="POST" action="{{ url_for('devices.bulk_update_status') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div id="bulkStatusDeviceIds"></div>
+                    
+                    <div class="mb-3">
+                        <label for="newStatus" class="form-label">Виберіть новий статус:</label>
+                        <select class="form-select" id="newStatus" name="new_status" required>
+                            <option value="">-- Оберіть статус --</option>
+                            <option value="Робочий">Робочий</option>
+                            <option value="Несправний">Несправний</option>
+                            <option value="На ремонті">На ремонті</option>
+                            <option value="Резерв">Резерв</option>
+                            <option value="Списано">Списано</option>
+                        </select>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        Буде змінено статус для <strong><span id="modalSelectedCount">0</span></strong> пристрої(в)
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                <button type="submit" form="bulkStatusForm" class="btn btn-primary">Застосувати</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- JavaScript для автоматичного застосування фільтрів -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -349,6 +400,138 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 500);
     });
     
+    // ===== ГРУПОВІ ОПЕРАЦІЇ =====
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const deviceCheckboxes = document.querySelectorAll('.device-checkbox');
+    const selectedCount = document.getElementById('selectedCount');
+    const selectedCountValue = document.getElementById('selectedCountValue');
+    const bulkStatusBtn = document.getElementById('bulkStatusBtn');
+    const bulkExportExcelBtn = document.getElementById('bulkExportExcelBtn');
+    const bulkExportPdfBtn = document.getElementById('bulkExportPdfBtn');
+    
+    // Вибрати/зняти всі
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', function() {
+            deviceCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBulkButtons();
+        });
+    }
+    
+    // Оновлення при зміні checkbox
+    deviceCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateBulkButtons);
+    });
+    
+    // Оновлення відображення кнопок
+    function updateBulkButtons() {
+        const selected = document.querySelectorAll('.device-checkbox:checked');
+        const count = selected.length;
+        
+        if (count > 0) {
+            selectedCount.style.display = 'inline';
+            selectedCountValue.textContent = count;
+            bulkStatusBtn.style.display = 'inline-block';
+            bulkExportExcelBtn.style.display = 'inline-block';
+            bulkExportPdfBtn.style.display = 'inline-block';
+        } else {
+            selectedCount.style.display = 'none';
+            bulkStatusBtn.style.display = 'none';
+            bulkExportExcelBtn.style.display = 'none';
+            bulkExportPdfBtn.style.display = 'none';
+        }
+        
+        // Оновлюємо стан "Вибрати всі"
+        if (selectAllCheckbox) {
+            selectAllCheckbox.checked = count === deviceCheckboxes.length && count > 0;
+            selectAllCheckbox.indeterminate = count > 0 && count < deviceCheckboxes.length;
+        }
+    }
+    
+    // Зміна статусу через модальне вікно
+    if (bulkStatusBtn) {
+        bulkStatusBtn.addEventListener('click', function() {
+            const selected = Array.from(document.querySelectorAll('.device-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return;
+            
+            // Заповнюємо модальне вікно
+            const deviceIdsContainer = document.getElementById('bulkStatusDeviceIds');
+            deviceIdsContainer.innerHTML = '';
+            
+            selected.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'device_ids';
+                input.value = id;
+                deviceIdsContainer.appendChild(input);
+            });
+            
+            document.getElementById('modalSelectedCount').textContent = selected.length;
+            
+            // Показуємо модальне вікно
+            const modal = new bootstrap.Modal(document.getElementById('bulkStatusModal'));
+            modal.show();
+        });
+    }
+    
+    // Експорт Excel
+    if (bulkExportExcelBtn) {
+        bulkExportExcelBtn.addEventListener('click', function() {
+            const selected = Array.from(document.querySelectorAll('.device-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return;
+            
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("devices.bulk_export_excel") }}';
+            
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = '{{ csrf_token() }}';
+            form.appendChild(csrfInput);
+            
+            selected.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'device_ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            
+            document.body.appendChild(form);
+            form.submit();
+        });
+    }
+    
+    // Експорт PDF
+    if (bulkExportPdfBtn) {
+        bulkExportPdfBtn.addEventListener('click', function() {
+            const selected = Array.from(document.querySelectorAll('.device-checkbox:checked')).map(cb => cb.value);
+            if (selected.length === 0) return;
+            
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("devices.export_devices_bulk_pdf") }}';
+            
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = '{{ csrf_token() }}';
+            form.appendChild(csrfInput);
+            
+            selected.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'device_ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            
+            document.body.appendChild(form);
+            form.submit();
+        });
+    }
 
 });
 </script>

@@ -123,6 +123,111 @@
     </div>
 </div>
 
+<!-- Фінансова інформація -->
+{% if device.purchase_price or device.repair_expenses %}
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-cash-stack"></i> Фінансова інформація</h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4">
+                <p><strong>Вартість покупки:</strong><br>
+                    {% if device.purchase_price %}
+                        <span class="fs-4 text-primary">{{ "%.2f"|format(device.purchase_price|float) }} грн</span>
+                    {% else %}
+                        <span class="text-muted">Не вказано</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>Поточна вартість:</strong><br>
+                    {% if device.current_value %}
+                        <span class="fs-4 text-success">{{ "%.2f"|format(device.current_value) }} грн</span>
+                    {% else %}
+                        <span class="text-muted">Не визначено</span>
+                    {% endif %}
+                </p>
+            </div>
+            <div class="col-md-4">
+                <p><strong>Витрати на ремонт:</strong><br>
+                    {% if device.total_repair_expenses > 0 %}
+                        <span class="fs-4 text-danger">{{ "%.2f"|format(device.total_repair_expenses) }} грн</span>
+                    {% else %}
+                        <span class="text-muted">0 грн</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        {% if device.purchase_date %}
+        <div class="row mt-2">
+            <div class="col-md-6">
+                <small class="text-muted">Дата покупки: {{ device.purchase_date.strftime('%d.%m.%Y') }}</small>
+            </div>
+            <div class="col-md-6">
+                <small class="text-muted">Амортизація: {{ device.depreciation_rate }}% на рік</small>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Витрати на ремонт -->
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-tools"></i> Витрати на ремонт</h5>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addRepairExpenseModal">
+            <i class="bi bi-plus-lg"></i> Додати витрати
+        </button>
+    </div>
+    <div class="card-body">
+        {% if device.repair_expenses %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Дата</th>
+                        <th>Сума</th>
+                        <th>Опис</th>
+                        <th>Накладна</th>
+                        <th>Дії</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for expense in device.repair_expenses %}
+                    <tr>
+                        <td>{{ expense.repair_date.strftime('%d.%m.%Y') }}</td>
+                        <td><strong class="text-danger">{{ "%.2f"|format(expense.amount|float) }} грн</strong></td>
+                        <td>{{ expense.description or '-' }}</td>
+                        <td>{{ expense.invoice_number or '-' }}</td>
+                        <td>
+                            <form method="POST" action="{{ url_for('devices.delete_repair_expense', expense_id=expense.id) }}" 
+                                  class="d-inline" onsubmit="return confirm('Ви впевнені, що хочете видалити ці витрати?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> Видалити
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-active">
+                        <th colspan="1">Всього:</th>
+                        <th class="text-danger">{{ "%.2f"|format(device.total_repair_expenses) }} грн</th>
+                        <th colspan="3"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted">Витрати на ремонт відсутні</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <div class="card mb-4">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span>Фотографії пристрою</span>
@@ -132,18 +237,29 @@
     </div>
     <div class="card-body">
         {% if device.photos %}
-        <div class="row">
+        <div class="photo-gallery row">
             {% for photo in device.photos %}
-            <div class="col-md-3 mb-3">
-                <div class="card">
-                    <a href="{{ url_for('devices.uploaded_file', filename=photo.filename) }}" target="_blank" title="Відкрити повне зображення">
-                        <img src="{{ url_for('devices.uploaded_file', filename=photo.filename) }}" class="card-img-top" alt="Фото пристрою" style="height: 150px; object-fit: cover;">
+            <div class="col-md-3 col-sm-6 mb-3">
+                <div class="card photo-card">
+                    <a href="{{ url_for('devices.uploaded_file', filename=photo.filename) }}" 
+                       class="photo-link" 
+                       data-photo-index="{{ loop.index0 }}"
+                       title="{{ photo.original_filename }}">
+                        <img src="{{ url_for('devices.uploaded_file', filename=photo.filename) }}" 
+                             class="card-img-top" 
+                             alt="Фото пристрою" 
+                             style="height: 150px; object-fit: cover; cursor: pointer;">
+                        <div class="photo-overlay">
+                            <i class="bi bi-zoom-in fs-1"></i>
+                        </div>
                     </a>
                     <div class="card-body p-2">
-                        <p class="card-text small">{{ photo.original_filename }}</p>
+                        <p class="card-text small text-truncate mb-2" title="{{ photo.original_filename }}">{{ photo.original_filename }}</p>
                         <form method="POST" action="{{ url_for('devices.delete_device_photo', photo_id=photo.id) }}" class="d-grid" onsubmit="return confirm('Ви впевнені, що хочете видалити це фото?');">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-danger">Видалити</button>
+                            <button type="submit" class="btn btn-sm btn-danger">
+                                <i class="bi bi-trash"></i> Видалити
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -182,6 +298,47 @@
     </div>
 </div>
 
+<!-- Модальне вікно для додавання витрат на ремонт -->
+<div class="modal fade" id="addRepairExpenseModal" tabindex="-1" aria-labelledby="addRepairExpenseModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('devices.add_repair_expense', device_id=device.id) }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addRepairExpenseModalLabel">Додати витрати на ремонт</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрити"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    
+                    <div class="mb-3">
+                        <label for="repair_date" class="form-label">Дата ремонту <span class="text-danger">*</span></label>
+                        <input type="date" class="form-control" id="repair_date" name="repair_date" value="{{ now.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Сума (грн) <span class="text-danger">*</span></label>
+                        <input type="number" step="0.01" class="form-control" id="amount" name="amount" placeholder="0.00" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="invoice_number" class="form-label">Номер накладної</label>
+                        <input type="text" class="form-control" id="invoice_number" name="invoice_number" placeholder="№123456">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Опис робіт</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" placeholder="Опишіть виконані роботи..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Скасувати</button>
+                    <button type="submit" class="btn btn-primary">Додати</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="mt-4">
     <a href="{{ url_for('devices.devices') }}" class="btn btn-secondary">Назад до списку</a>
     <a href="{{ url_for('devices.edit_device', device_id=device.id) }}" class="btn btn-primary">Редагувати</a>
@@ -192,4 +349,143 @@
         <i class="bi bi-qr-code"></i> QR-код
     </a>
 </div>
+
+<!-- Lightbox Modal -->
+<div class="modal fade" id="lightboxModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content bg-dark text-white">
+            <div class="modal-header border-0">
+                <h5 class="modal-title" id="lightboxTitle">Фото пристрою</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Закрити"></button>
+            </div>
+            <div class="modal-body p-0 position-relative">
+                <img id="lightboxImage" src="" alt="Фото" class="w-100" style="max-height: 80vh; object-fit: contain;">
+                
+                <!-- Навігаційні кнопки -->
+                <button class="btn btn-light btn-lg position-absolute top-50 start-0 translate-middle-y ms-3" id="prevPhoto" style="opacity: 0.7;">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <button class="btn btn-light btn-lg position-absolute top-50 end-0 translate-middle-y me-3" id="nextPhoto" style="opacity: 0.7;">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+                
+                <!-- Лічильник -->
+                <div class="position-absolute bottom-0 start-50 translate-middle-x mb-3 bg-dark bg-opacity-75 px-3 py-1 rounded">
+                    <span id="photoCounter">1 / 1</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.photo-card {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.photo-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.photo-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    color: white;
+}
+
+.photo-link:hover .photo-overlay {
+    opacity: 1;
+}
+
+.photo-link {
+    text-decoration: none;
+    position: relative;
+    display: block;
+}
+
+#lightboxModal .modal-body button {
+    z-index: 10;
+}
+
+#lightboxModal .modal-body button:hover {
+    opacity: 1 !important;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const lightboxModal = document.getElementById('lightboxModal');
+    const lightboxImage = document.getElementById('lightboxImage');
+    const lightboxTitle = document.getElementById('lightboxTitle');
+    const photoCounter = document.getElementById('photoCounter');
+    const prevBtn = document.getElementById('prevPhoto');
+    const nextBtn = document.getElementById('nextPhoto');
+    
+    const photos = Array.from(document.querySelectorAll('.photo-link'));
+    let currentIndex = 0;
+    
+    if (photos.length === 0) return; // Якщо немає фото
+    
+    // Відкриття lightbox
+    photos.forEach((link, index) => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            currentIndex = index;
+            showPhoto(currentIndex);
+            new bootstrap.Modal(lightboxModal).show();
+        });
+    });
+    
+    // Функція показу фото
+    function showPhoto(index) {
+        const photo = photos[index];
+        lightboxImage.src = photo.href;
+        lightboxTitle.textContent = photo.title || 'Фото пристрою';
+        photoCounter.textContent = `${index + 1} / ${photos.length}`;
+        
+        // Показ/приховування кнопок навігації
+        prevBtn.style.display = photos.length > 1 ? 'block' : 'none';
+        nextBtn.style.display = photos.length > 1 ? 'block' : 'none';
+    }
+    
+    // Попереднє фото
+    prevBtn.addEventListener('click', function() {
+        currentIndex = (currentIndex - 1 + photos.length) % photos.length;
+        showPhoto(currentIndex);
+    });
+    
+    // Наступне фото
+    nextBtn.addEventListener('click', function() {
+        currentIndex = (currentIndex + 1) % photos.length;
+        showPhoto(currentIndex);
+    });
+    
+    // Клавіатурна навігація
+    document.addEventListener('keydown', function(e) {
+        if (lightboxModal.classList.contains('show')) {
+            if (e.key === 'ArrowLeft') {
+                prevBtn.click();
+            } else if (e.key === 'ArrowRight') {
+                nextBtn.click();
+            } else if (e.key === 'Escape') {
+                bootstrap.Modal.getInstance(lightboxModal).hide();
+            }
+        }
+    });
+});
+</script>
+
 {% endblock %}
