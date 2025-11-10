@@ -6,9 +6,7 @@ import os
 import re
 import shutil
 import sqlite3
-import json
 import time
-import requests
 import secrets
 import jwt
 from PIL import Image
@@ -21,6 +19,45 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def validate_password_strength(password):
+    """
+    Валідує складність пароля
+    
+    Вимоги:
+    - Мінімум 8 символів
+    - Обов'язково: великі літери, малі літери, цифри
+    - Опціонально: спеціальні символи
+    
+    Args:
+        password: Пароль для перевірки
+    
+    Returns:
+        tuple: (is_valid: bool, errors: list) - чи валідний пароль та список помилок
+    """
+    errors = []
+    
+    if not password:
+        return False, ['Пароль не може бути порожнім']
+    
+    if len(password) < 8:
+        errors.append('Пароль має містити мінімум 8 символів')
+    
+    if not re.search(r'[A-Z]', password):
+        errors.append('Пароль має містити принаймні одну велику літеру')
+    
+    if not re.search(r'[a-z]', password):
+        errors.append('Пароль має містити принаймні одну малу літеру')
+    
+    if not re.search(r'\d', password):
+        errors.append('Пароль має містити принаймні одну цифру')
+    
+    # Опціонально: спеціальні символи (не обов'язково, але рекомендується)
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        # Не додаємо помилку, але можемо додати попередження
+        pass
+    
+    return len(errors) == 0, errors
+
 def optimize_image(image_path, max_width=1920, max_height=1920, quality=85):
     """
     Оптимізує зображення: зменшує розмір, стискає
@@ -32,7 +69,7 @@ def optimize_image(image_path, max_width=1920, max_height=1920, quality=85):
         quality: Якість JPEG (1-100)
     
     Returns:
-        True якщо успішно, False у випадку помилки
+        str: Шлях до оптимізованого зображення або False у випадку помилки
     """
     try:
         with Image.open(image_path) as img:
@@ -62,10 +99,137 @@ def optimize_image(image_path, max_width=1920, max_height=1920, quality=85):
                 img.save(image_path, 'JPEG', quality=quality, optimize=True)
                 return image_path
         
-        return True
+        return False
     except Exception as e:
         print(f"Помилка оптимізації зображення {image_path}: {e}")
         return False
+
+def generate_thumbnails(image_path, sizes=None):
+    """
+    Генерує thumbnail'и різних розмірів для зображення
+    
+    Args:
+        image_path: Шлях до оригінального зображення
+        sizes: Список кортежів (width, height, suffix) для thumbnail'ів
+               За замовчуванням: [(150, 150, 'thumb'), (300, 300, 'medium'), (800, 800, 'large')]
+    
+    Returns:
+        dict: Словник з шляхами до thumbnail'ів {suffix: path} або False у випадку помилки
+    """
+    if sizes is None:
+        sizes = [
+            (150, 150, 'thumb'),   # Маленький thumbnail
+            (300, 300, 'medium'),  # Середній
+            (800, 800, 'large')    # Великий
+        ]
+    
+    try:
+        base_path = os.path.splitext(image_path)[0]
+        ext = os.path.splitext(image_path)[1].lower()
+        thumbnails = {}
+        
+        with Image.open(image_path) as img:
+            # Конвертуємо RGBA в RGB якщо потрібно
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            
+            for width, height, suffix in sizes:
+                # Створюємо копію для thumbnail'а
+                thumb = img.copy()
+                thumb.thumbnail((width, height), Image.Resampling.LANCZOS)
+                
+                # Зберігаємо thumbnail
+                thumb_path = f"{base_path}_{suffix}{ext}"
+                thumb.save(thumb_path, 'JPEG', quality=85, optimize=True)
+                thumbnails[suffix] = thumb_path
+        
+        return thumbnails
+    except Exception as e:
+        print(f"Помилка генерації thumbnail'ів для {image_path}: {e}")
+        return False
+
+def convert_to_webp(image_path, quality=85):
+    """
+    Конвертує зображення в WebP формат (якщо браузер підтримує)
+    
+    Args:
+        image_path: Шлях до зображення
+        quality: Якість WebP (1-100)
+    
+    Returns:
+        str: Шлях до WebP файлу або False у випадку помилки
+    """
+    try:
+        with Image.open(image_path) as img:
+            # Конвертуємо RGBA в RGB якщо потрібно
+            if img.mode in ('RGBA', 'LA', 'P'):
+                background = Image.new('RGB', img.size, (255, 255, 255))
+                if img.mode == 'P':
+                    img = img.convert('RGBA')
+                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                img = background
+            
+            # Створюємо WebP версію
+            webp_path = os.path.splitext(image_path)[0] + '.webp'
+            img.save(webp_path, 'WEBP', quality=quality, method=6)
+            
+            return webp_path
+    except Exception as e:
+        print(f"Помилка конвертації в WebP {image_path}: {e}")
+        return False
+
+def cleanup_unused_photos():
+    """
+    Видаляє невикористані фото з файлової системи
+    
+    Returns:
+        int: Кількість видалених файлів
+    """
+    from models import DevicePhoto, db
+    import glob
+    
+    try:
+        # Отримуємо всі фото з бази даних
+        used_photos = {photo.filename for photo in DevicePhoto.query.all()}
+        
+        # Отримуємо всі файли в папці uploads
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'static/uploads')
+        all_files = set()
+        
+        # Шукаємо всі файли (включаючи thumbnail'и та WebP)
+        for pattern in ['*.jpg', '*.jpeg', '*.png', '*.gif', '*.webp']:
+            for file_path in glob.glob(os.path.join(upload_folder, pattern)):
+                filename = os.path.basename(file_path)
+                # Видаляємо суфікси thumbnail'ів (_thumb, _medium, _large)
+                base_filename = filename
+                for suffix in ['_thumb', '_medium', '_large']:
+                    if suffix in base_filename:
+                        base_filename = base_filename.replace(suffix, '')
+                        # Також видаляємо розширення для порівняння
+                        base_filename = os.path.splitext(base_filename)[0] + os.path.splitext(filename)[1]
+                        break
+                
+                # Перевіряємо чи файл використовується
+                if base_filename not in used_photos and filename not in used_photos:
+                    all_files.add(file_path)
+        
+        # Видаляємо невикористані файли
+        count = 0
+        for file_path in all_files:
+            try:
+                os.remove(file_path)
+                count += 1
+            except Exception as e:
+                print(f"Помилка видалення файлу {file_path}: {e}")
+        
+        return count
+    except Exception as e:
+        print(f"Помилка очищення невикористаних фото: {e}")
+        return 0
 
 def admin_required(f):
     """Декоратор для перевірки прав адміністратора"""
@@ -108,7 +272,306 @@ def log_user_activity(user_id, action, ip_address=None, url=None):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Помилка при записі активності користувача: {e}")
+        print(f"Помилка логування активності: {e}")
+
+def record_failed_login_attempt(ip_address, username=None):
+    """
+    Записує невдалу спробу входу та блокує IP після 5 спроб на 15 хвилин
+    
+    Args:
+        ip_address: IP адреса з якої була спроба
+        username: Ім'я користувача (опціонально)
+    
+    Returns:
+        tuple: (is_blocked: bool, remaining_seconds: int, attempt_count: int)
+    """
+    from models import FailedLoginAttempt, db
+    from datetime import timedelta
+    
+    # Знаходимо або створюємо запис для цього IP
+    attempt = FailedLoginAttempt.query.filter_by(ip_address=ip_address).first()
+    
+    if not attempt:
+        attempt = FailedLoginAttempt(
+            ip_address=ip_address,
+            username=username,
+            attempt_count=1,
+            last_attempt=datetime.utcnow()
+        )
+        db.session.add(attempt)
+    else:
+        # Оновлюємо лічильник спроб
+        attempt.attempt_count += 1
+        attempt.last_attempt = datetime.utcnow()
+        if username:
+            attempt.username = username  # Оновлюємо username якщо він змінився
+    
+    # Блокуємо IP після 5 невдалих спроб на 15 хвилин
+    if attempt.attempt_count >= 5:
+        if not attempt.blocked_until or datetime.utcnow() >= attempt.blocked_until:
+            attempt.blocked_until = datetime.utcnow() + timedelta(minutes=15)
+            # Логуємо підозрілу активність
+            log_suspicious_activity(ip_address, f"IP заблоковано після {attempt.attempt_count} невдалих спроб входу", username)
+    
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Помилка запису невдалої спроби: {e}")
+        return False, 0, 0
+    
+    # Перевіряємо чи IP заблоковано
+    is_blocked = attempt.is_blocked()
+    remaining_seconds = attempt.get_remaining_block_time()
+    
+    return is_blocked, remaining_seconds, attempt.attempt_count
+
+def check_ip_blocked(ip_address):
+    """
+    Перевіряє чи IP адреса заблокована
+    
+    Args:
+        ip_address: IP адреса для перевірки
+    
+    Returns:
+        tuple: (is_blocked: bool, remaining_seconds: int, attempt_count: int)
+    """
+    from models import FailedLoginAttempt
+    
+    attempt = FailedLoginAttempt.query.filter_by(ip_address=ip_address).first()
+    
+    if not attempt:
+        return False, 0, 0
+    
+    is_blocked = attempt.is_blocked()
+    remaining_seconds = attempt.get_remaining_block_time()
+    
+    return is_blocked, remaining_seconds, attempt.attempt_count
+
+def reset_failed_login_attempts(ip_address):
+    """
+    Скидає лічильник невдалих спроб для IP адреси (викликається при успішному вході)
+    
+    Args:
+        ip_address: IP адреса для скидання
+    """
+    from models import FailedLoginAttempt, db
+    
+    attempt = FailedLoginAttempt.query.filter_by(ip_address=ip_address).first()
+    if attempt:
+        try:
+            db.session.delete(attempt)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Помилка скидання невдалих спроб: {e}")
+
+def log_suspicious_activity(ip_address, description, username=None):
+    """
+    Логує підозрілу активність (блокировки, багато невдалих спроб тощо)
+    
+    Args:
+        ip_address: IP адреса
+        description: Опис підозрілої активності
+        username: Ім'я користувача (опціонально)
+    """
+    try:
+        from flask import current_app
+        current_app.logger.warning(
+            f"SUSPICIOUS ACTIVITY - IP: {ip_address}, "
+            f"Username: {username or 'N/A'}, "
+            f"Description: {description}, "
+            f"Time: {datetime.utcnow().isoformat()}"
+        )
+    except:
+        # Якщо не можемо залогувати, просто ігноруємо
+        pass
+
+def create_user_session(user_id, session_id, ip_address=None, user_agent=None):
+    """
+    Створює запис про активну сесію користувача
+    
+    Args:
+        user_id: ID користувача
+        session_id: Flask session ID
+        ip_address: IP адреса (опціонально)
+        user_agent: User-Agent заголовок (опціонально)
+    
+    Returns:
+        UserSession: Створений об'єкт сесії
+    """
+    from models import UserSession, db
+    from flask import request
+    
+    # Використовуємо request якщо не передано
+    if not ip_address:
+        ip_address = request.remote_addr if request else 'unknown'
+    if not user_agent:
+        user_agent = request.headers.get('User-Agent') if request else None
+    
+    # Перевіряємо чи сесія вже існує
+    existing_session = UserSession.query.filter_by(session_id=session_id).first()
+    if existing_session:
+        # Оновлюємо існуючу сесію
+        existing_session.is_active = True
+        existing_session.last_activity = datetime.utcnow()
+        existing_session.ip_address = ip_address
+        if user_agent:
+            existing_session.user_agent = user_agent
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Помилка оновлення сесії: {e}")
+        return existing_session
+    
+    # Створюємо нову сесію
+    session = UserSession(
+        user_id=user_id,
+        session_id=session_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        is_active=True
+    )
+    db.session.add(session)
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Помилка створення сесії: {e}")
+        return None
+    
+    return session
+
+def update_session_activity(session_id):
+    """
+    Оновлює час останньої активності для сесії
+    
+    Args:
+        session_id: Flask session ID
+    """
+    from models import UserSession, db
+    
+    session = UserSession.query.filter_by(session_id=session_id, is_active=True).first()
+    if session:
+        session.update_activity()
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Помилка оновлення активності сесії: {e}")
+
+def deactivate_user_session(session_id):
+    """
+    Деактивує сесію користувача
+    
+    Args:
+        session_id: Flask session ID
+    """
+    from models import UserSession, db
+    
+    session = UserSession.query.filter_by(session_id=session_id).first()
+    if session:
+        session.is_active = False
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Помилка деактивації сесії: {e}")
+
+def deactivate_all_user_sessions(user_id, exclude_session_id=None):
+    """
+    Деактивує всі сесії користувача, крім поточної
+    
+    Args:
+        user_id: ID користувача
+        exclude_session_id: Session ID яку не потрібно деактивувати (поточна сесія)
+    
+    Returns:
+        int: Кількість деактивованих сесій
+    """
+    from models import UserSession, db
+    
+    query = UserSession.query.filter_by(user_id=user_id, is_active=True)
+    if exclude_session_id:
+        query = query.filter(UserSession.session_id != exclude_session_id)
+    
+    sessions = query.all()
+    count = len(sessions)
+    
+    for session in sessions:
+        session.is_active = False
+    
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Помилка деактивації сесій: {e}")
+        return 0
+    
+    return count
+
+def cleanup_expired_sessions(inactivity_timeout_minutes=30):
+    """
+    Очищає прострочені сесії (неактивні більше 30 хвилин)
+    
+    Args:
+        inactivity_timeout_minutes: Таймаут неактивності в хвилинах
+    
+    Returns:
+        int: Кількість очищених сесій
+    """
+    from models import UserSession, db
+    
+    expired_sessions = UserSession.query.filter_by(is_active=True).all()
+    count = 0
+    
+    for session in expired_sessions:
+        if session.is_expired(inactivity_timeout_minutes):
+            session.is_active = False
+            count += 1
+    
+    if count > 0:
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Помилка очищення сесій: {e}")
+            return 0
+    
+    return count
+
+def cleanup_expired_blacklist():
+    """
+    Очищає прострочені записи з blacklist токенів
+    
+    Returns:
+        int: Кількість очищених записів
+    """
+    from models import TokenBlacklist, db
+    
+    expired_blacklist = TokenBlacklist.query.all()
+    count = 0
+    
+    for blacklisted in expired_blacklist:
+        if blacklisted.is_expired():
+            try:
+                db.session.delete(blacklisted)
+                count += 1
+            except Exception as e:
+                db.session.rollback()
+                print(f"Помилка видалення запису з blacklist: {e}")
+                continue
+    
+    if count > 0:
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"Помилка очищення blacklist: {e}")
+            return 0
+    
+    return count
 
 def record_device_history(device_id, user_id, action, field=None, old_value=None, new_value=None, device=None):
     """Записує історію змін пристрою"""
@@ -261,543 +724,24 @@ def get_backup_list(backup_folder='backups'):
         current_app.logger.error(f"Помилка при отриманні списку backup: {e}")
         return []
 
-def get_telegram_settings():
-    """
-    Отримує налаштування Telegram з бази даних або конфігурації
-    
-    Returns:
-        dict: Словник з налаштуваннями (bot_token, chat_id, enabled)
-    """
-    from models import SystemSettings, db
-    
-    try:
-        # Спочатку пробуємо отримати з бази даних
-        bot_token_setting = SystemSettings.query.filter_by(key='telegram_bot_token').first()
-        chat_id_setting = SystemSettings.query.filter_by(key='telegram_chat_id').first()
-        enabled_setting = SystemSettings.query.filter_by(key='telegram_enabled').first()
-        
-        bot_token = bot_token_setting.value if bot_token_setting else None
-        chat_id = chat_id_setting.value if chat_id_setting else None
-        enabled = enabled_setting.value.lower() == 'true' if enabled_setting else False
-        
-        # Якщо в базі даних немає, використовуємо конфігурацію
-        if not bot_token:
-            bot_token = current_app.config.get('TELEGRAM_BOT_TOKEN', '')
-        if not chat_id:
-            chat_id = current_app.config.get('TELEGRAM_CHAT_ID', '')
-        if not enabled_setting:
-            enabled = current_app.config.get('TELEGRAM_ENABLED', False)
-        
-        return {
-            'bot_token': bot_token,
-            'chat_id': chat_id,
-            'enabled': enabled
-        }
-    except Exception as e:
-        current_app.logger.error(f"Помилка при отриманні Telegram налаштувань: {e}")
-        # Fallback до конфігурації
-        return {
-            'bot_token': current_app.config.get('TELEGRAM_BOT_TOKEN', ''),
-            'chat_id': current_app.config.get('TELEGRAM_CHAT_ID', ''),
-            'enabled': current_app.config.get('TELEGRAM_ENABLED', False)
-        }
-
-def save_telegram_settings(bot_token, chat_id, enabled):
-    """
-    Зберігає налаштування Telegram в базу даних
-    
-    Args:
-        bot_token: Токен бота
-        chat_id: ID чату
-        enabled: Увімкнено/вимкнено
-    
-    Returns:
-        bool: True якщо успішно збережено
-    """
-    from models import SystemSettings, db
-    
-    try:
-        # Зберігаємо токен бота
-        token_setting = SystemSettings.query.filter_by(key='telegram_bot_token').first()
-        if token_setting:
-            token_setting.value = bot_token
-            token_setting.updated_at = datetime.utcnow()
-        else:
-            token_setting = SystemSettings(
-                key='telegram_bot_token',
-                value=bot_token,
-                description='Telegram Bot Token для нагадувань'
-            )
-            db.session.add(token_setting)
-        
-        # Зберігаємо chat ID
-        chat_setting = SystemSettings.query.filter_by(key='telegram_chat_id').first()
-        if chat_setting:
-            chat_setting.value = chat_id
-            chat_setting.updated_at = datetime.utcnow()
-        else:
-            chat_setting = SystemSettings(
-                key='telegram_chat_id',
-                value=chat_id,
-                description='Telegram Chat ID для нагадувань'
-            )
-            db.session.add(chat_setting)
-        
-        # Зберігаємо статус увімкнення
-        enabled_setting = SystemSettings.query.filter_by(key='telegram_enabled').first()
-        if enabled_setting:
-            enabled_setting.value = 'true' if enabled else 'false'
-            enabled_setting.updated_at = datetime.utcnow()
-        else:
-            enabled_setting = SystemSettings(
-                key='telegram_enabled',
-                value='true' if enabled else 'false',
-                description='Увімкнено Telegram нагадування'
-            )
-            db.session.add(enabled_setting)
-        
-        db.session.commit()
-        return True
-    except Exception as e:
-        current_app.logger.error(f"Помилка при збереженні Telegram налаштувань: {e}")
-        db.session.rollback()
-        return False
-
-def test_telegram_connection(bot_token=None, chat_id=None):
-    """
-    Тестує з'єднання з Telegram ботом
-    
-    Args:
-        bot_token: Токен бота (якщо не вказано, використовується з налаштувань)
-        chat_id: ID чату (якщо не вказано, використовується з налаштувань)
-    
-    Returns:
-        dict: {'success': bool, 'message': str}
-    """
-    try:
-        settings = get_telegram_settings()
-        
-        test_token = bot_token or settings['bot_token']
-        test_chat_id = chat_id or settings['chat_id']
-        
-        if not test_token:
-            return {'success': False, 'message': 'Токен бота не вказано'}
-        
-        if not test_chat_id:
-            return {'success': False, 'message': 'Chat ID не вказано'}
-        
-        # Тестове повідомлення
-        test_message = "🧪 <b>Тестове повідомлення</b>\n\nЦе тестове повідомлення для перевірки налаштувань Telegram бота."
-        
-        # URL для відправки повідомлення
-        url = f"https://api.telegram.org/bot{test_token}/sendMessage"
-        
-        # Параметри запиту
-        payload = {
-            'chat_id': test_chat_id,
-            'text': test_message,
-            'parse_mode': 'HTML'
-        }
-        
-        # Відправляємо запит
-        response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
-        
-        result = response.json()
-        if result.get('ok'):
-            return {'success': True, 'message': 'Тестове повідомлення успішно відправлено!'}
-        else:
-            error_desc = result.get('description', 'Невідома помилка')
-            return {'success': False, 'message': f'Помилка: {error_desc}'}
-            
-    except requests.exceptions.RequestException as e:
-        return {'success': False, 'message': f'Помилка з\'єднання: {str(e)}'}
-    except Exception as e:
-        current_app.logger.error(f"Помилка при тестуванні Telegram з'єднання: {e}")
-        return {'success': False, 'message': f'Несподівана помилка: {str(e)}'}
-
-def send_telegram_notification(message, chat_id=None):
-    """
-    Відправляє повідомлення в Telegram через бота
-    
-    Args:
-        message: Текст повідомлення
-        chat_id: ID чату (якщо не вказано, використовується з налаштувань)
-    
-    Returns:
-        bool: True якщо повідомлення відправлено, False якщо помилка
-    """
-    try:
-        settings = get_telegram_settings()
-        
-        if not settings['enabled'] or not settings['bot_token']:
-            current_app.logger.debug("Telegram нагадування вимкнено або токен не налаштовано")
-            return False
-        
-        # Використовуємо chat_id з параметра або з налаштувань
-        target_chat_id = chat_id or settings['chat_id']
-        if not target_chat_id:
-            current_app.logger.warning("Telegram chat_id не вказано")
-            return False
-        
-        # URL для відправки повідомлення
-        url = f"https://api.telegram.org/bot{settings['bot_token']}/sendMessage"
-        
-        # Параметри запиту
-        payload = {
-            'chat_id': target_chat_id,
-            'text': message,
-            'parse_mode': 'HTML'  # Дозволяє використовувати HTML форматування
-        }
-        
-        # Відправляємо запит
-        response = requests.post(url, json=payload, timeout=10)
-        response.raise_for_status()
-        
-        result = response.json()
-        if result.get('ok'):
-            current_app.logger.info(f"Telegram повідомлення успішно відправлено в чат {target_chat_id}")
-            return True
-        else:
-            current_app.logger.error(f"Помилка відправки Telegram повідомлення: {result.get('description')}")
-            return False
-            
-    except requests.exceptions.RequestException as e:
-        current_app.logger.error(f"Помилка при відправці Telegram повідомлення: {e}")
-        return False
-    except Exception as e:
-        current_app.logger.error(f"Несподівана помилка при відправці Telegram повідомлення: {e}")
-        return False
-
-def send_test_maintenance_notification():
-    """
-    Відправляє тестове нагадування про обслуговування для перевірки Telegram бота
-    Використовується для тестування налаштувань
-    """
-    from datetime import date, timedelta
-    
-    try:
-        settings = get_telegram_settings()
-        
-        if not settings['enabled'] or not settings['bot_token']:
-            current_app.logger.warning("Telegram нагадування вимкнено або токен не налаштовано")
-            return False
-        
-        if not settings['chat_id']:
-            current_app.logger.warning("Telegram chat_id не вказано")
-            return False
-        
-        # Отримуємо першого активного користувача для тесту
-        from models import User, Device, City, db
-        test_user = User.query.filter_by(is_active=True).first()
-        
-        if not test_user:
-            current_app.logger.warning("Не знайдено активних користувачів для тестового нагадування")
-            return False
-        
-        # Створюємо тестове повідомлення
-        today = date.today()
-        test_date = today - timedelta(days=5)  # Прострочене на 5 днів
-        
-        message = (
-            f"🧪 <b>ТЕСТОВЕ НАГАДУВАННЯ</b>\n\n"
-            f"👤 <b>Користувач:</b> {test_user.username}\n"
-            f"📦 <b>Пристрій:</b> Тестовий пристрій (для перевірки налаштувань)\n"
-            f"🔢 <b>Інвентарний номер:</b> TEST-0001\n"
-            f"📅 <b>Дата обслуговування:</b> {test_date.strftime('%d.%m.%Y')}\n"
-            f"⏰ <b>Прострочено:</b> 5 дн.\n"
-            f"📍 <b>Місцезнаходження:</b> Тестова локація\n"
-            f"🏢 <b>Місто:</b> {test_user.city.name if test_user.city else 'Не вказано'}\n\n"
-            f"<i>Це тестове повідомлення для перевірки налаштувань Telegram бота.</i>"
-        )
-        
-        # Відправляємо повідомлення
-        if send_telegram_notification(message):
-            current_app.logger.info("Тестове нагадування про обслуговування успішно відправлено")
-            return True
-        else:
-            current_app.logger.error("Помилка відправки тестового нагадування")
-            return False
-            
-    except Exception as e:
-        current_app.logger.error(f"Помилка при відправці тестового нагадування: {e}", exc_info=True)
-        return False
-
-def send_test_device_notification(device_id):
-    """
-    Відправляє тестове нагадування про обслуговування для конкретного пристрою
-    Використовується для тестування нагадувань для конкретного пристрою
-    
-    Args:
-        device_id: ID пристрою
-    """
-    from datetime import date, timedelta
-    
-    try:
-        settings = get_telegram_settings()
-        
-        if not settings['enabled'] or not settings['bot_token']:
-            current_app.logger.warning("Telegram нагадування вимкнено або токен не налаштовано")
-            return False
-        
-        if not settings['chat_id']:
-            current_app.logger.warning("Telegram chat_id не вказано")
-            return False
-        
-        # Отримуємо пристрій з бази даних
-        from models import Device, User, db
-        from sqlalchemy.orm import joinedload
-        device = Device.query.options(
-            joinedload(Device.city)
-        ).get(device_id)
-        
-        if not device:
-            current_app.logger.warning(f"Пристрій з ID {device_id} не знайдено")
-            return False
-        
-        # Отримуємо активних користувачів міста пристрою
-        users = User.query.filter_by(city_id=device.city_id, is_active=True).all()
-        
-        if not users:
-            current_app.logger.warning(f"Не знайдено активних користувачів для міста пристрою {device_id}")
-            return False
-        
-        # Використовуємо першого користувача для тесту
-        test_user = users[0]
-        
-        # Створюємо тестове повідомлення на основі реального пристрою
-        today = date.today()
-        if device.next_maintenance:
-            days_overdue = (today - device.next_maintenance).days if device.next_maintenance < today else 0
-            days_until = (device.next_maintenance - today).days if device.next_maintenance >= today else 0
-        else:
-            days_overdue = 5  # Тестове значення
-            days_until = 0
-        
-        if days_overdue > 0:
-            message = (
-                f"🧪 <b>ТЕСТОВЕ НАГАДУВАННЯ</b>\n\n"
-                f"👤 <b>Користувач:</b> {test_user.username}\n"
-                f"📦 <b>Пристрій:</b> {device.name}\n"
-                f"🔢 <b>Інвентарний номер:</b> {device.inventory_number}\n"
-                f"📅 <b>Дата обслуговування:</b> {device.next_maintenance.strftime('%d.%m.%Y') if device.next_maintenance else 'Не вказано'}\n"
-                f"⏰ <b>Прострочено:</b> {days_overdue} дн.\n"
-                f"📍 <b>Місцезнаходження:</b> {device.location or 'Не вказано'}\n"
-                f"🏢 <b>Місто:</b> {device.city.name if device.city else 'Не вказано'}\n\n"
-                f"<i>Це тестове повідомлення для перевірки нагадувань Telegram бота для пристрою {device.inventory_number}.</i>"
-            )
-        else:
-            message = (
-                f"🧪 <b>ТЕСТОВЕ НАГАДУВАННЯ</b>\n\n"
-                f"👤 <b>Користувач:</b> {test_user.username}\n"
-                f"📦 <b>Пристрій:</b> {device.name}\n"
-                f"🔢 <b>Інвентарний номер:</b> {device.inventory_number}\n"
-                f"📅 <b>Дата обслуговування:</b> {device.next_maintenance.strftime('%d.%m.%Y') if device.next_maintenance else 'Не вказано'}\n"
-                f"⏰ <b>Залишилось днів:</b> {days_until}\n"
-                f"📍 <b>Місцезнаходження:</b> {device.location or 'Не вказано'}\n"
-                f"🏢 <b>Місто:</b> {device.city.name if device.city else 'Не вказано'}\n\n"
-                f"<i>Це тестове повідомлення для перевірки нагадувань Telegram бота для пристрою {device.inventory_number}.</i>"
-            )
-        
-        # Відправляємо повідомлення
-        if send_telegram_notification(message):
-            current_app.logger.info(f"Тестове нагадування про обслуговування для пристрою {device_id} успішно відправлено")
-            return True
-        else:
-            current_app.logger.error(f"Помилка відправки тестового нагадування для пристрою {device_id}")
-            return False
-            
-    except Exception as e:
-        current_app.logger.error(f"Помилка при відправці тестового нагадування для пристрою {device_id}: {e}", exc_info=True)
-        return False
-
-def check_additional_reminders():
-    """
-    Перевіряє додаткові ситуації та відправляє інформативні нагадування в Telegram.
-    
-    Типи нагадувань:
-    - Пристрої без фото
-    - Пристрої без призначеного співробітника
-    - Пристрої з великими витратами на ремонт
-    - Пристрої на ремонті довше 30 днів
-    - Пристрої без фінансової інформації
-    - Пристрої, які не оновлювались довгий час
-    """
-    from models import Device, User, db, DevicePhoto, RepairExpense, DeviceHistory
-    from datetime import date, timedelta, datetime
-    from sqlalchemy.orm import joinedload
-    from sqlalchemy import func
-    
-    try:
-        settings = get_telegram_settings()
-        if not settings['enabled']:
-            return {'notifications_sent': 0}
-        
-        today = date.today()
-        notifications_sent = 0
-        messages = []
-        
-        # 1. Пристрої без фото (якщо є пристрої без фото)
-        devices_without_photos = Device.query.outerjoin(DevicePhoto).filter(
-            DevicePhoto.id.is_(None),
-            Device.status != 'Списано'
-        ).options(joinedload(Device.city)).limit(10).all()
-        
-        if devices_without_photos:
-            devices_list = ', '.join([f"{d.inventory_number} ({d.name})" for d in devices_without_photos[:5]])
-            if len(devices_without_photos) > 5:
-                devices_list += f" та ще {len(devices_without_photos) - 5} пристроїв"
-            
-            message = (
-                f"📸 <b>Пристрої без фото</b>\n\n"
-                f"Знайдено <b>{len(devices_without_photos)}</b> пристроїв без фотографій:\n"
-                f"{devices_list}\n\n"
-                f"<i>Рекомендується додати фото для повноти інформації.</i>"
-            )
-            messages.append(message)
-        
-        # 2. Пристрої без призначеного співробітника (якщо є такі)
-        devices_without_employee = Device.query.filter(
-            Device.assigned_to_employee_id.is_(None),
-            Device.status == 'В роботі'
-        ).options(joinedload(Device.city)).limit(10).all()
-        
-        if devices_without_employee:
-            devices_list = ', '.join([f"{d.inventory_number} ({d.name})" for d in devices_without_employee[:5]])
-            if len(devices_without_employee) > 5:
-                devices_list += f" та ще {len(devices_without_employee) - 5} пристроїв"
-            
-            message = (
-                f"👤 <b>Пристрої без призначеного співробітника</b>\n\n"
-                f"Знайдено <b>{len(devices_without_employee)}</b> пристроїв без призначеного співробітника:\n"
-                f"{devices_list}\n\n"
-                f"<i>Рекомендується призначити відповідальну особу.</i>"
-            )
-            messages.append(message)
-        
-        # 3. Пристрої з великими витратами на ремонт (більше 50% від вартості покупки)
-        devices_high_repair = Device.query.filter(
-            Device.purchase_price.isnot(None),
-            Device.purchase_price > 0,
-            Device.status != 'Списано'
-        ).options(joinedload(Device.city), joinedload(Device.repair_expenses)).all()
-        
-        high_repair_devices = []
-        for device in devices_high_repair:
-            if device.purchase_price and device.total_repair_expenses > 0:
-                repair_percentage = (device.total_repair_expenses / float(device.purchase_price)) * 100
-                if repair_percentage > 50:
-                    high_repair_devices.append((device, repair_percentage))
-        
-        if high_repair_devices:
-            devices_list = []
-            for device, percentage in high_repair_devices[:5]:
-                devices_list.append(f"{device.inventory_number} ({device.name}) - {percentage:.1f}%")
-            devices_text = '\n'.join(devices_list)
-            if len(high_repair_devices) > 5:
-                devices_text += f"\nта ще {len(high_repair_devices) - 5} пристроїв"
-            
-            message = (
-                f"💰 <b>Пристрої з високими витратами на ремонт</b>\n\n"
-                f"Знайдено <b>{len(high_repair_devices)}</b> пристроїв, де витрати на ремонт перевищують 50% від вартості покупки:\n"
-                f"{devices_text}\n\n"
-                f"<i>Рекомендується перевірити доцільність подальшого використання.</i>"
-            )
-            messages.append(message)
-        
-        # 4. Пристрої на ремонті довше 30 днів
-        # Шукаємо пристрої зі статусом "На ремонті", які не оновлювались довгий час
-        # Використовуємо DeviceHistory для визначення, коли пристрій був переведений на ремонт
-        thirty_days_ago = today - timedelta(days=30)
-        thirty_days_ago_datetime = datetime.combine(thirty_days_ago, datetime.min.time())
-        
-        # Знаходимо пристрої на ремонті, які не мають недавніх оновлень
-        devices_long_repair = Device.query.filter(
-            Device.status == 'На ремонті',
-            Device.status != 'Списано'
-        ).options(joinedload(Device.city)).all()
-        
-        # Фільтруємо ті, які не оновлювались останні 30 днів (через DeviceHistory)
-        long_repair_filtered = []
-        for device in devices_long_repair:
-            # Перевіряємо останню активність
-            last_history = db.session.query(func.max(DeviceHistory.timestamp)).filter_by(device_id=device.id).scalar()
-            if not last_history or last_history < thirty_days_ago_datetime:
-                long_repair_filtered.append(device)
-        
-        devices_long_repair = long_repair_filtered[:10]
-        
-        if devices_long_repair:
-            devices_list = ', '.join([f"{d.inventory_number} ({d.name})" for d in devices_long_repair[:5]])
-            if len(devices_long_repair) > 5:
-                devices_list += f" та ще {len(devices_long_repair) - 5} пристроїв"
-            
-            message = (
-                f"🔧 <b>Пристрої на ремонті довше 30 днів</b>\n\n"
-                f"Знайдено <b>{len(devices_long_repair)}</b> пристроїв, які знаходяться на ремонті більше 30 днів:\n"
-                f"{devices_list}\n\n"
-                f"<i>Рекомендується перевірити статус ремонту або оновити інформацію.</i>"
-            )
-            messages.append(message)
-        
-        # 5. Пристрої без фінансової інформації (дата покупки або вартість)
-        devices_no_financial = Device.query.filter(
-            db.or_(
-                Device.purchase_date.is_(None),
-                Device.purchase_price.is_(None)
-            ),
-            Device.status != 'Списано'
-        ).options(joinedload(Device.city)).limit(10).all()
-        
-        if devices_no_financial:
-            devices_list = ', '.join([f"{d.inventory_number} ({d.name})" for d in devices_no_financial[:5]])
-            if len(devices_no_financial) > 5:
-                devices_list += f" та ще {len(devices_no_financial) - 5} пристроїв"
-            
-            message = (
-                f"💵 <b>Пристрої без фінансової інформації</b>\n\n"
-                f"Знайдено <b>{len(devices_no_financial)}</b> пристроїв без дати покупки або вартості:\n"
-                f"{devices_list}\n\n"
-                f"<i>Рекомендується додати фінансову інформацію для повного обліку.</i>"
-            )
-            messages.append(message)
-        
-        # Відправляємо всі нагадування (якщо є)
-        if messages:
-            # Об'єднуємо всі повідомлення в одне
-            combined_message = "📋 <b>Інформаційні нагадування</b>\n\n" + "\n\n---\n\n".join(messages)
-            
-            if send_telegram_notification(combined_message):
-                notifications_sent = 1
-                current_app.logger.info(f"Відправлено інформаційні нагадування: {len(messages)} типів")
-        
-        return {'notifications_sent': notifications_sent, 'types': len(messages)}
-    except Exception as e:
-        current_app.logger.error(f"Помилка при перевірці додаткових нагадувань: {e}", exc_info=True)
-        return {'notifications_sent': 0, 'types': 0}
-
 def check_maintenance_reminders(days_before=30):
     """
-    Перевіряє пристрої, яким потрібне обслуговування та відправляє нагадування в Telegram.
+    Перевіряє пристрої, яким потрібне обслуговування.
     
     Логіка нагадувань:
     - Пристрої з простроченим обслуговуванням (next_maintenance < today) - відправляються щодня
     - Пристрої, яким час обслуговування настав сьогодні (next_maintenance == today) - відправляються щодня
     - Пристрої, яким скоро обслуговування (next_maintenance <= today + days_before) - відправляються один раз
+    
+    Примітка: Функція повертає статистику про пристрої, які потребують обслуговування.
+    Telegram нагадування видалено.
     """
     from models import Device, User, db, SystemSettings
     from datetime import date, timedelta
     from sqlalchemy.orm import joinedload
     
     try:
-        # Перевіряємо, чи увімкнено Telegram нагадування
-        settings = get_telegram_settings()
-        if not settings['enabled']:
-            current_app.logger.debug("Telegram нагадування вимкнено")
-            return {'overdue': 0, 'soon': 0, 'notifications_sent': 0}
-        
         today = date.today()
-        notifications_sent = 0
         
         # Пристрої, яким обслуговування прострочене або час вже вийшов (включаючи сьогодні)
         overdue_devices = Device.query.options(
@@ -819,121 +763,15 @@ def check_maintenance_reminders(days_before=30):
             Device.status != 'Списано'
         ).all()
         
-        # Обробка прострочених пристроїв або пристроїв, яким час обслуговування вже вийшов
-        for device in overdue_devices:
-            # Отримуємо всіх активних користувачів міста
-            users = User.query.filter_by(city_id=device.city_id, is_active=True).all()
-            
-            if not users:
-                continue
-            
-            # Визначаємо, скільки днів прострочено
-            days_overdue = (today - device.next_maintenance).days
-            
-            # Формуємо повідомлення залежно від ситуації
-            if days_overdue == 0:
-                # Час обслуговування настав сьогодні
-                message = (
-                    f"⏰ <b>Час обслуговування настав!</b>\n\n"
-                    f"👤 <b>Користувач:</b> {users[0].username}\n"
-                    f"📦 <b>Пристрій:</b> {device.name}\n"
-                    f"🔢 <b>Інвентарний номер:</b> {device.inventory_number}\n"
-                    f"📅 <b>Дата обслуговування:</b> {device.next_maintenance.strftime('%d.%m.%Y')} (сьогодні)\n"
-                    f"📍 <b>Місцезнаходження:</b> {device.location or 'Не вказано'}\n"
-                    f"🏢 <b>Місто:</b> {device.city.name if device.city else 'Не вказано'}\n\n"
-                    f"<b>⚠️ Необхідно провести обслуговування пристрою!</b>"
-                )
-            else:
-                # Обслуговування прострочене
-                message = (
-                    f"🔴 <b>Обслуговування прострочене!</b>\n\n"
-                    f"👤 <b>Користувач:</b> {users[0].username}\n"
-                    f"📦 <b>Пристрій:</b> {device.name}\n"
-                    f"🔢 <b>Інвентарний номер:</b> {device.inventory_number}\n"
-                    f"📅 <b>Дата обслуговування:</b> {device.next_maintenance.strftime('%d.%m.%Y')}\n"
-                    f"⏰ <b>Прострочено:</b> {days_overdue} дн.\n"
-                    f"📍 <b>Місцезнаходження:</b> {device.location or 'Не вказано'}\n"
-                    f"🏢 <b>Місто:</b> {device.city.name if device.city else 'Не вказано'}\n\n"
-                    f"<b>⚠️ Необхідно негайно провести обслуговування пристрою!</b>"
-                )
-            
-            # Відправляємо нагадування в групу (одне повідомлення на пристрій)
-            if send_telegram_notification(message):
-                notifications_sent += 1
-                current_app.logger.info(
-                    f"Відправлено нагадування про обслуговування для пристрою {device.inventory_number} "
-                    f"(прострочено: {days_overdue} дн.)"
-                )
-        
-        # Обробка пристроїв, яким скоро обслуговування
-        for device in soon_devices:
-            users = User.query.filter_by(city_id=device.city_id, is_active=True).all()
-            
-            if not users:
-                continue
-            
-            days_until = (device.next_maintenance - today).days
-            
-            # Перевіряємо, чи вже відправляли нагадування для цього пристрою
-            # Використовуємо SystemSettings для зберігання інформації про відправлені нагадування
-            reminder_key = f"maintenance_reminder_{device.id}_{device.next_maintenance}"
-            existing_reminder = SystemSettings.query.filter_by(key=reminder_key).first()
-            
-            # Якщо нагадування вже відправлялось для цієї дати, пропускаємо
-            if existing_reminder:
-                continue
-            
-            message = (
-                f"⚠️ <b>Незабаром обслуговування!</b>\n\n"
-                f"👤 <b>Користувач:</b> {users[0].username}\n"
-                f"📦 <b>Пристрій:</b> {device.name}\n"
-                f"🔢 <b>Інвентарний номер:</b> {device.inventory_number}\n"
-                f"📅 <b>Дата обслуговування:</b> {device.next_maintenance.strftime('%d.%m.%Y')}\n"
-                f"⏰ <b>Залишилось днів:</b> {days_until}\n"
-                f"📍 <b>Місцезнаходження:</b> {device.location or 'Не вказано'}\n"
-                f"🏢 <b>Місто:</b> {device.city.name if device.city else 'Не вказано'}\n\n"
-                f"<i>Підготуйте пристрій до обслуговування.</i>"
-            )
-            
-            # Відправляємо нагадування
-            if send_telegram_notification(message):
-                # Зберігаємо інформацію про відправлене нагадування
-                reminder_setting = SystemSettings(
-                    key=reminder_key,
-                    value='sent',
-                    description=f'Нагадування про обслуговування для пристрою {device.inventory_number} на {device.next_maintenance}'
-                )
-                db.session.add(reminder_setting)
-                db.session.commit()
-                
-                notifications_sent += 1
-                current_app.logger.info(
-                    f"Відправлено попереднє нагадування про обслуговування для пристрою {device.inventory_number} "
-                    f"(залишилось: {days_until} дн.)"
-                )
-        
-        # Очищаємо старі записи про нагадування (старіші за 60 днів)
-        old_date = today - timedelta(days=60)
-        old_datetime = datetime.combine(old_date, datetime.min.time())
-        old_reminders = SystemSettings.query.filter(
-            SystemSettings.key.like('maintenance_reminder_%'),
-            SystemSettings.created_at < old_datetime
-        ).all()
-        for old_reminder in old_reminders:
-            db.session.delete(old_reminder)
-        if old_reminders:
-            db.session.commit()
-        
         current_app.logger.info(
             f"Перевірка обслуговування завершена. "
-            f"Прострочено/час вийшов: {len(overdue_devices)}, Скоро: {len(soon_devices)}, "
-            f"Повідомлень відправлено: {notifications_sent}"
+            f"Прострочено/час вийшов: {len(overdue_devices)}, Скоро: {len(soon_devices)}"
         )
         
         return {
             'overdue': len(overdue_devices), 
             'soon': len(soon_devices), 
-            'notifications_sent': notifications_sent
+            'notifications_sent': 0
         }
     except Exception as e:
         current_app.logger.error(f"Помилка при перевірці обслуговування: {e}", exc_info=True)
@@ -941,14 +779,14 @@ def check_maintenance_reminders(days_before=30):
         return {'overdue': 0, 'soon': 0, 'notifications_sent': 0}
 
 # JWT функції для API автентифікації
-def generate_jwt_token(user_id, token_name=None, expires_in_days=30):
+def generate_jwt_token(user_id, token_name=None, expires_in_days=None):
     """
     Генерує JWT токен для користувача
     
     Args:
         user_id: ID користувача
         token_name: Назва токена (опціонально)
-        expires_in_days: Термін дії токена в днях (за замовчуванням 30)
+        expires_in_days: Термін дії refresh token в днях (за замовчуванням 7, не використовується для access token)
     
     Returns:
         tuple: (access_token, refresh_token, token_id)
@@ -958,47 +796,50 @@ def generate_jwt_token(user_id, token_name=None, expires_in_days=30):
     # Генеруємо унікальний ID для токена
     token_id = secrets.token_urlsafe(32)
     
-    # Термін дії токена
-    expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
-    refresh_expires_at = datetime.utcnow() + timedelta(days=expires_in_days * 2)
+    # Термін дії токенів
+    # Access token: 15 хвилин
+    access_expires_at = datetime.utcnow() + timedelta(minutes=15)
+    # Refresh token: 7 днів (або вказаний термін)
+    refresh_expires_days = expires_in_days if expires_in_days is not None else 7
+    refresh_expires_at = datetime.utcnow() + timedelta(days=refresh_expires_days)
     now = datetime.utcnow()
     
     # Секретний ключ з конфігурації
     secret_key = current_app.config.get('SECRET_KEY', 'dev-secret-key')
     
-    # Створюємо access token
+    # Створюємо access token (15 хвилин)
     access_payload = {
         'user_id': user_id,
         'jti': token_id,  # JWT ID
         'type': 'access',
-        'exp': expires_at,
-        'iat': now
+        'exp': int(access_expires_at.timestamp()),  # Unix timestamp
+        'iat': int(now.timestamp())
     }
     access_token = jwt.encode(access_payload, secret_key, algorithm='HS256')
     
-    # Створюємо refresh token
+    # Створюємо refresh token (7 днів)
     refresh_token_id = secrets.token_urlsafe(32)
     refresh_payload = {
         'user_id': user_id,
         'jti': refresh_token_id,
         'type': 'refresh',
         'access_jti': token_id,  # Посилання на access token
-        'exp': refresh_expires_at,
-        'iat': now
+        'exp': int(refresh_expires_at.timestamp()),
+        'iat': int(now.timestamp())
     }
     refresh_token = jwt.encode(refresh_payload, secret_key, algorithm='HS256')
     
-    # Зберігаємо токен в базі даних
+    # Зберігаємо access token в базі даних
     api_token = ApiToken(
         user_id=user_id,
         token_id=token_id,
         name=token_name or f'Token {datetime.utcnow().strftime("%Y-%m-%d %H:%M")}',
-        expires_at=expires_at,
+        expires_at=access_expires_at,
         is_active=True
     )
     db.session.add(api_token)
     
-    # Зберігаємо refresh token (опціонально, можна зберігати в окремій таблиці)
+    # Зберігаємо refresh token
     refresh_token_record = ApiToken(
         user_id=user_id,
         token_id=refresh_token_id,
@@ -1015,6 +856,62 @@ def generate_jwt_token(user_id, token_name=None, expires_in_days=30):
         current_app.logger.error(f"Помилка при збереженні токена: {e}")
         db.session.rollback()
         raise
+
+def is_token_blacklisted(token_id):
+    """
+    Перевіряє чи токен в blacklist
+    
+    Args:
+        token_id: JWT ID токена
+    
+    Returns:
+        bool: True якщо токен в blacklist, False якщо ні
+    """
+    from models import TokenBlacklist
+    
+    blacklisted = TokenBlacklist.query.filter_by(token_id=token_id).first()
+    if blacklisted:
+        # Якщо токен прострочений, можна видалити з blacklist
+        if blacklisted.is_expired():
+            try:
+                from models import db
+                db.session.delete(blacklisted)
+                db.session.commit()
+            except:
+                pass
+            return False
+        return True
+    return False
+
+def add_token_to_blacklist(token_id, token_type, user_id, expires_at):
+    """
+    Додає токен до blacklist
+    
+    Args:
+        token_id: JWT ID токена
+        token_type: Тип токена ('access' або 'refresh')
+        user_id: ID користувача
+        expires_at: Час прострочення токена
+    """
+    from models import TokenBlacklist, db
+    
+    # Перевіряємо чи токен вже в blacklist
+    existing = TokenBlacklist.query.filter_by(token_id=token_id).first()
+    if existing:
+        return
+    
+    blacklisted = TokenBlacklist(
+        token_id=token_id,
+        token_type=token_type,
+        user_id=user_id,
+        expires_at=expires_at
+    )
+    db.session.add(blacklisted)
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Помилка додавання токена до blacklist: {e}")
 
 def verify_jwt_token(token):
     """
@@ -1038,8 +935,12 @@ def verify_jwt_token(token):
         if payload.get('type') != 'access':
             return None
         
-        # Перевіряємо наявність токена в базі
+        # Перевіряємо чи токен в blacklist
         token_id = payload.get('jti')
+        if is_token_blacklisted(token_id):
+            return None
+        
+        # Перевіряємо наявність токена в базі
         api_token = ApiToken.query.filter_by(
             token_id=token_id,
             is_active=True
@@ -1051,6 +952,8 @@ def verify_jwt_token(token):
         # Перевіряємо термін дії
         if api_token.is_expired():
             api_token.is_active = False
+            # Додаємо до blacklist
+            add_token_to_blacklist(token_id, 'access', api_token.user_id, api_token.expires_at)
             db.session.commit()
             return None
         
@@ -1067,7 +970,17 @@ def verify_jwt_token(token):
         return user
         
     except jwt.ExpiredSignatureError:
-        # Токен прострочений
+        # Токен прострочений - додаємо до blacklist якщо можливо
+        try:
+            payload = jwt.decode(token, secret_key, algorithms=['HS256'], options={"verify_signature": False, "verify_exp": False})
+            token_id = payload.get('jti')
+            user_id = payload.get('user_id')
+            exp = payload.get('exp')
+            if exp and token_id and user_id:
+                expires_at = datetime.fromtimestamp(exp)
+                add_token_to_blacklist(token_id, 'access', user_id, expires_at)
+        except:
+            pass
         return None
     except jwt.InvalidTokenError:
         # Невірний токен
@@ -1078,7 +991,7 @@ def verify_jwt_token(token):
 
 def revoke_jwt_token(token_id):
     """
-    Відкликає JWT токен
+    Відкликає JWT токен (додає до blacklist)
     
     Args:
         token_id: ID токена (jti)
@@ -1091,7 +1004,24 @@ def revoke_jwt_token(token_id):
     try:
         api_token = ApiToken.query.filter_by(token_id=token_id).first()
         if api_token:
+            # Деактивуємо токен
             api_token.is_active = False
+            
+            # Додаємо до blacklist
+            token_type = 'access'  # За замовчуванням access, але можна визначити з payload
+            add_token_to_blacklist(token_id, token_type, api_token.user_id, api_token.expires_at)
+            
+            # Також відкликаємо пов'язаний refresh token якщо є
+            # Шукаємо refresh token який посилається на цей access token
+            refresh_token = ApiToken.query.filter(
+                ApiToken.name.like(f'Refresh token for {token_id}'),
+                ApiToken.is_active == True
+            ).first()
+            
+            if refresh_token:
+                refresh_token.is_active = False
+                add_token_to_blacklist(refresh_token.token_id, 'refresh', refresh_token.user_id, refresh_token.expires_at)
+            
             db.session.commit()
             return True
         return False
@@ -1102,13 +1032,13 @@ def revoke_jwt_token(token_id):
 
 def refresh_access_token(refresh_token):
     """
-    Генерує новий access token на основі refresh token
+    Генерує новий access token та новий refresh token на основі старого refresh token (ротація)
     
     Args:
         refresh_token: Refresh JWT токен
     
     Returns:
-        str: Новий access token або None
+        tuple: (new_access_token, new_refresh_token) або (None, None) якщо невалідний
     """
     from models import User, ApiToken, db
     
@@ -1120,59 +1050,107 @@ def refresh_access_token(refresh_token):
         
         # Перевіряємо тип токена
         if payload.get('type') != 'refresh':
-            return None
+            return None, None
+        
+        # Перевіряємо чи refresh token в blacklist
+        refresh_token_id = payload.get('jti')
+        if is_token_blacklisted(refresh_token_id):
+            return None, None
         
         # Перевіряємо наявність refresh token в базі
-        refresh_token_id = payload.get('jti')
         refresh_token_record = ApiToken.query.filter_by(
             token_id=refresh_token_id,
             is_active=True
-                ).first()
+        ).first()
                 
         if not refresh_token_record or refresh_token_record.is_expired():
-            return None
+            # Додаємо до blacklist якщо прострочений
+            if refresh_token_record:
+                add_token_to_blacklist(refresh_token_id, 'refresh', refresh_token_record.user_id, refresh_token_record.expires_at)
+            return None, None
         
         # Отримуємо access token ID
         access_token_id = payload.get('access_jti')
+        user_id = payload.get('user_id')
         
-        # Відкликаємо старий access token
+        # Відкликаємо старий access token (додаємо до blacklist)
         old_token = ApiToken.query.filter_by(token_id=access_token_id).first()
         if old_token:
             old_token.is_active = False
+            add_token_to_blacklist(access_token_id, 'access', old_token.user_id, old_token.expires_at)
         
-        # Генеруємо новий access token
-        user_id = payload.get('user_id')
-        expires_at = datetime.utcnow() + timedelta(days=30)
+        # Відкликаємо старий refresh token (ротація)
+        refresh_token_record.is_active = False
+        add_token_to_blacklist(refresh_token_id, 'refresh', refresh_token_record.user_id, refresh_token_record.expires_at)
+        
+        # Генеруємо новий access token (15 хвилин)
+        access_expires_at = datetime.utcnow() + timedelta(minutes=15)
         now = datetime.utcnow()
         new_token_id = secrets.token_urlsafe(32)
         
-        new_payload = {
+        new_access_payload = {
             'user_id': user_id,
             'jti': new_token_id,
             'type': 'access',
-            'exp': expires_at,
-            'iat': now
+            'exp': int(access_expires_at.timestamp()),
+            'iat': int(now.timestamp())
         }
-        new_access_token = jwt.encode(new_payload, secret_key, algorithm='HS256')
+        new_access_token = jwt.encode(new_access_payload, secret_key, algorithm='HS256')
         
-        # Зберігаємо новий токен
+        # Генеруємо новий refresh token (7 днів) - ротація
+        new_refresh_token_id = secrets.token_urlsafe(32)
+        refresh_expires_at = datetime.utcnow() + timedelta(days=7)
+        
+        new_refresh_payload = {
+            'user_id': user_id,
+            'jti': new_refresh_token_id,
+            'type': 'refresh',
+            'access_jti': new_token_id,  # Посилання на новий access token
+            'exp': int(refresh_expires_at.timestamp()),
+            'iat': int(now.timestamp())
+        }
+        new_refresh_token = jwt.encode(new_refresh_payload, secret_key, algorithm='HS256')
+        
+        # Зберігаємо новий access token
         new_token_record = ApiToken(
             user_id=user_id,
             token_id=new_token_id,
             name=f'Refreshed token {datetime.utcnow().strftime("%Y-%m-%d %H:%M")}',
-            expires_at=expires_at,
+            expires_at=access_expires_at,
             is_active=True
         )
         db.session.add(new_token_record)
+        
+        # Зберігаємо новий refresh token
+        new_refresh_record = ApiToken(
+            user_id=user_id,
+            token_id=new_refresh_token_id,
+            name=f'Refresh token for {new_token_id}',
+            expires_at=refresh_expires_at,
+            is_active=True
+        )
+        db.session.add(new_refresh_record)
+        
         db.session.commit()
         
-        return new_access_token
+        return new_access_token, new_refresh_token
         
     except jwt.ExpiredSignatureError:
-        return None
+        # Додаємо до blacklist якщо можливо
+        try:
+            payload = jwt.decode(refresh_token, secret_key, algorithms=['HS256'], options={"verify_signature": False, "verify_exp": False})
+            refresh_token_id = payload.get('jti')
+            user_id = payload.get('user_id')
+            exp = payload.get('exp')
+            if exp and refresh_token_id and user_id:
+                expires_at = datetime.fromtimestamp(exp)
+                add_token_to_blacklist(refresh_token_id, 'refresh', user_id, expires_at)
+        except:
+            pass
+        return None, None
     except jwt.InvalidTokenError:
-        return None
+        return None, None
     except Exception as e:
         current_app.logger.error(f"Помилка при оновленні токена: {e}")
         db.session.rollback()
-        return None
+        return None, None
