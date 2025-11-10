@@ -1,42 +1,46 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload, selectinload
 from models import Employee, City, db, Device
-from utils import log_user_activity
+from utils import log_user_activity, admin_required
 from datetime import datetime
 
 employees_bp = Blueprint('employees', __name__)
 
 @employees_bp.route('/employees')
 @login_required
+@admin_required
 def employees():
     """Список співробітників"""
     # Для адміністраторів - всі міста, для звичайних користувачів - тільки своє місто
     if current_user.is_admin:
-        employees_list = Employee.query.order_by(Employee.last_name, Employee.first_name).all()
+        employees_list = Employee.query.options(joinedload(Employee.city)).order_by(Employee.last_name, Employee.first_name).all()
         cities = City.query.all()
     else:
-        employees_list = Employee.query.filter_by(city_id=current_user.city_id).order_by(Employee.last_name, Employee.first_name).all()
+        employees_list = Employee.query.options(joinedload(Employee.city)).filter_by(city_id=current_user.city_id).order_by(Employee.last_name, Employee.first_name).all()
         cities = [current_user.city]
     
     return render_template('employees.html', employees=employees_list, cities=cities, current_user=current_user)
 
 @employees_bp.route('/employees/<int:employee_id>')
 @login_required
+@admin_required
 def employee_detail(employee_id):
     """Деталі співробітника"""
-    employee = Employee.query.get_or_404(employee_id)
+    employee = Employee.query.options(joinedload(Employee.city)).get_or_404(employee_id)
     
     # Перевіряємо доступ
     if not current_user.is_admin and employee.city_id != current_user.city_id:
         abort(403)
     
-    # Отримуємо пристрої співробітника
-    devices = Device.query.filter_by(assigned_to_employee_id=employee_id).all()
+    # Отримуємо пристрої співробітника з eager loading
+    devices = Device.query.options(joinedload(Device.city)).filter_by(assigned_to_employee_id=employee_id).all()
     
     return render_template('employee_detail.html', employee=employee, devices=devices)
 
 @employees_bp.route('/employees/add', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def add_employee():
     """Додавання нового співробітника"""
     if request.method == 'POST':
@@ -75,9 +79,10 @@ def add_employee():
 
 @employees_bp.route('/employees/<int:employee_id>/edit', methods=['GET', 'POST'])
 @login_required
+@admin_required
 def edit_employee(employee_id):
     """Редагування співробітника"""
-    employee = Employee.query.get_or_404(employee_id)
+    employee = Employee.query.options(joinedload(Employee.city)).get_or_404(employee_id)
     
     # Перевіряємо доступ
     if not current_user.is_admin and employee.city_id != current_user.city_id:
@@ -114,9 +119,10 @@ def edit_employee(employee_id):
 
 @employees_bp.route('/employees/<int:employee_id>/delete', methods=['POST'])
 @login_required
+@admin_required
 def delete_employee(employee_id):
     """Видалення співробітника"""
-    employee = Employee.query.get_or_404(employee_id)
+    employee = Employee.query.options(joinedload(Employee.city)).get_or_404(employee_id)
     
     # Перевіряємо доступ
     if not current_user.is_admin and employee.city_id != current_user.city_id:
@@ -138,9 +144,10 @@ def delete_employee(employee_id):
 
 @employees_bp.route('/employees/<int:employee_id>/toggle-active', methods=['POST'])
 @login_required
+@admin_required
 def toggle_employee_active(employee_id):
     """Активація/деактивація співробітника"""
-    employee = Employee.query.get_or_404(employee_id)
+    employee = Employee.query.options(joinedload(Employee.city)).get_or_404(employee_id)
     
     # Перевіряємо доступ
     if not current_user.is_admin and employee.city_id != current_user.city_id:

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block title %}Резервне копіювання{% endblock %}
 
@@ -59,7 +59,7 @@
                                                 {{ "%.2f"|format(backup.size / (1024 * 1024)) }} MB
                                             {% endif %}
                                         </td>
-                                        <td>{{ backup.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                                        <td>{{ backup.timestamp | local_time('%d.%m.%Y %H:%M:%S') }}</td>
                                         <td class="text-end">
                                             <a href="{{ url_for('admin.admin_download_backup', filename=backup.filename) }}" 
                                                class="btn btn-sm btn-success">

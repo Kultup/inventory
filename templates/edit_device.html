@@ -100,11 +100,6 @@
                     <input type="date" class="form-control" id="purchase_date" name="purchase_date" value="{{ device.purchase_date.strftime('%Y-%m-%d') if device.purchase_date else '' }}">
                 </div>
             </div>
-            <div class="mb-3">
-                <label for="depreciation_rate" class="form-label">Відсоток амортизації (% на рік)</label>
-                <input type="number" step="0.01" class="form-control" id="depreciation_rate" name="depreciation_rate" value="{{ device.depreciation_rate or 20.0 }}">
-                <div class="form-text">Стандартна амортизація для техніки: 20% на рік.</div>
-            </div>
         </div>
     </div>
 

@@ -20,6 +20,7 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     city_id = db.Column(db.Integer, db.ForeignKey('city.id'), nullable=False)
+    telegram_chat_id = db.Column(db.String(100), nullable=True, index=True)  # Telegram chat ID для нагадувань
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     
@@ -54,12 +55,8 @@ class Device(db.Model):
     histories = db.relationship('DeviceHistory', backref='device', lazy=True)
     
     def update_next_maintenance(self):
-        """Оновлює дату наступного обслуговування на основі останнього обслуговування та інтервалу"""
-        if self.last_maintenance and self.maintenance_interval:
-            from datetime import timedelta
-            self.next_maintenance = self.last_maintenance + timedelta(days=self.maintenance_interval)
-        else:
-            self.next_maintenance = None
+        """Обслуговування вимкнено: не обчислюємо наступне обслуговування"""
+        self.next_maintenance = None
     
     @property
     def current_value(self):
@@ -199,3 +196,25 @@ class Notification(db.Model):
     
     # Зв'язки
     user = db.relationship('User', backref='notifications', lazy=True)
+
+class ApiToken(db.Model):
+    """Модель API токенів для JWT автентифікації"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token_id = db.Column(db.String(100), unique=True, nullable=False, index=True)  # JWT jti (JWT ID)
+    name = db.Column(db.String(100))  # Назва токена (для ідентифікації)
+    is_active = db.Column(db.Boolean, default=True)
+    expires_at = db.Column(db.DateTime, nullable=False, index=True)
+    last_used_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Зв'язки
+    user = db.relationship('User', backref='api_tokens', lazy=True)
+    
+    def __repr__(self):
+        return f'<ApiToken {self.token_id} for user {self.user_id}>'
+    
+    def is_expired(self):
+        """Перевіряє, чи токен прострочений"""
+        from datetime import datetime
+        return datetime.utcnow() > self.expires_at

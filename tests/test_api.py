@@ -1,5 +1,11 @@
 import unittest
 import json
+import sys
+import os
+
+# Додаємо кореневий каталог проєкту до PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import app
 from models import db, User, City, Device
 from werkzeug.security import generate_password_hash
@@ -34,7 +40,17 @@ class APITestCase(unittest.TestCase):
         db.session.add(self.user)
         db.session.commit()
         
+        # Генеруємо JWT токен для тестів
+        from utils import generate_jwt_token
+        access_token, refresh_token, token_id = generate_jwt_token(self.user.id, expires_in_days=1)
+        
         self.headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json'
+        }
+        
+        # Старий формат для зворотної сумісності
+        self.old_headers = {
             'X-API-Key': 'testapi',
             'Content-Type': 'application/json'
         }

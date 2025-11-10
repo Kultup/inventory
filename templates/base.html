@@ -18,14 +18,18 @@
     <meta name="apple-mobile-web-app-title" content="Інвентаризація">
     
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
         /* Стилі для інвентаризаційної системи */
         body {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            background-color: #f5f6fa;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f6fa;
             color: #2c3e50;
+            overflow-x: hidden;
         }
         
         [data-bs-theme="dark"] body {
@@ -33,55 +37,196 @@
             color: #e9ecef;
         }
         
+        /* Бічна панель */
+        .sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            height: 100vh !important;
+            width: 250px !important;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%) !important;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000 !important;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: transform 0.3s ease;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        
+        [data-bs-theme="dark"] .sidebar {
+            background: linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%);
+        }
+        
+        .sidebar-header {
+            padding: 1.5rem 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.2);
+        }
+        
+        .sidebar-brand {
+            color: #ffffff;
+            font-size: 1.3rem;
+            font-weight: 700;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .sidebar-brand:hover {
+            color: #3498db;
+        }
+        
+        .sidebar-nav {
+            padding: 1rem 0;
+            padding-bottom: 120px;
+        }
+        
+        .sidebar-nav .nav-link {
+            color: #bdc3c7;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+            text-decoration: none;
+        }
+        
+        .sidebar-nav .nav-link:hover {
+            color: #ffffff;
+            background-color: rgba(52, 152, 219, 0.2);
+            border-left-color: #3498db;
+        }
+        
+        .sidebar-nav .nav-link.active {
+            color: #ffffff;
+            background-color: rgba(52, 152, 219, 0.3);
+            border-left-color: #3498db;
+            font-weight: 600;
+        }
+        
+        .sidebar-nav .nav-link i {
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+        
+        .sidebar-nav .nav-link .badge {
+            margin-left: auto;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
+        }
+        
+        .sidebar-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.1);
+            margin: 0.5rem 1.5rem;
+        }
+        
+        .sidebar-footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            background: rgba(0,0,0,0.2);
+            width: 100%;
+        }
+        
+        .sidebar-footer .nav-link {
+            color: #bdc3c7;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+        
+        /* Основний контент */
+        .main-content {
+            margin-left: 250px;
+            min-height: 100vh;
+            transition: margin-left 0.3s ease;
+        }
+        
+        .top-bar {
+            background: #ffffff;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        [data-bs-theme="dark"] .top-bar {
+            background: #2d2d2d;
+            border-bottom-color: #404040;
+        }
+        
+        .content-wrapper {
+            padding: 2rem;
+        }
+        
+        /* Адаптивність */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0 !important;
+            }
+            
+            .sidebar-toggle {
+                display: block !important;
+            }
+        }
+        
+        /* На десктопі sidebar завжди видимий */
+        @media (min-width: 769px) {
+            .sidebar {
+                transform: translateX(0) !important;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+        }
+        
+        .sidebar-toggle {
+            display: none;
+            position: fixed;
+            top: 1rem;
+            left: 1rem;
+            z-index: 1001;
+            background: #2c3e50;
+            color: #ffffff;
+            border: none;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .sidebar-toggle:hover {
+            background: #34495e;
+        }
+        
         main {
             flex: 1;
             padding: 20px 0;
-        }
-        
-        /* Професійна навігація */
-        .navbar {
-            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%) !important;
-            border-bottom: 3px solid #3498db;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            padding: 1rem 0;
-        }
-        
-        [data-bs-theme="dark"] .navbar {
-            background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%) !important;
-            border-bottom: 3px solid #0d6efd;
-        }
-        
-        .navbar-brand {
-            font-weight: 700;
-            color: #ffffff !important;
-            font-size: 1.4rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .nav-link {
-            color: #bdc3c7 !important;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            padding: 0.5rem 1rem !important;
-            border-radius: 4px;
-            margin: 0 2px;
-        }
-        
-        .nav-link:hover, .nav-link.active {
-            color: #ffffff !important;
-            background-color: rgba(52, 152, 219, 0.2);
-        }
-        
-        .navbar-theme-icon {
-            font-size: 1.2rem;
-            cursor: pointer;
-            color: #bdc3c7;
-            transition: color 0.3s ease;
-        }
-        
-        .navbar-theme-icon:hover {
-            color: #3498db;
         }
         
         /* Функціональні картки */
@@ -757,90 +902,108 @@
     
     {% block extra_css %}{% endblock %}
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-            <div class="container">
-                <a class="navbar-brand" href="{{ url_for('index') }}">
-                    <i class="bi bi-box-seam me-2"></i>Інвентаризація
+<body style="margin: 0; padding: 0; overflow-x: hidden;">
+    <!-- Бічна панель -->
+    <nav class="sidebar" id="sidebar" style="display: block !important; visibility: visible !important;">
+        <div class="sidebar-header">
+            <a href="{{ url_for('index') }}" class="sidebar-brand">
+                <i class="bi bi-box-seam"></i>
+                <span>Інвентаризація</span>
+            </a>
+        </div>
+        
+        <div class="sidebar-nav">
+            <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                <i class="bi bi-house"></i>
+                <span>Головна</span>
+            </a>
+            
+            {% if current_user.is_authenticated %}
+            <a href="{{ url_for('devices.devices') }}" class="nav-link {% if request.endpoint == 'devices.devices' or request.endpoint == 'devices.device_detail' or request.endpoint == 'devices.add_device' or request.endpoint == 'devices.edit_device' %}active{% endif %}">
+                <i class="bi bi-laptop"></i>
+                <span>Пристрої</span>
+            </a>
+            
+            {# Прибрано пункт меню "Обслуговування" #}
+            
+            {% if current_user.is_admin %}
+            <div class="sidebar-divider"></div>
+            
+            <a href="{{ url_for('admin.admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin.admin_dashboard' %}active{% endif %}">
+                <i class="bi bi-speedometer2"></i>
+                <span>Дашборд</span>
+            </a>
+            
+            {# Прибрано пункт меню "Підтвердження обслуговування" #}
+            
+            <a href="{{ url_for('employees.employees') }}" class="nav-link {% if request.endpoint == 'employees.employees' or request.endpoint == 'employees.add_employee' or request.endpoint == 'employees.edit_employee' %}active{% endif %}">
+                <i class="bi bi-people"></i>
+                <span>Співробітники</span>
+            </a>
+            
+            <a href="{{ url_for('admin.admin_users') }}" class="nav-link {% if request.endpoint == 'admin.admin_users' or request.endpoint == 'admin.admin_add_user' or request.endpoint == 'admin.admin_edit_user' %}active{% endif %}">
+                <i class="bi bi-person-gear"></i>
+                <span>Користувачі</span>
+            </a>
+            
+            <a href="{{ url_for('admin.admin_cities') }}" class="nav-link {% if request.endpoint == 'admin.admin_cities' or request.endpoint == 'admin.admin_add_city' or request.endpoint == 'admin.admin_edit_city' %}active{% endif %}">
+                <i class="bi bi-geo-alt"></i>
+                <span>Міста</span>
+            </a>
+            
+            <a href="{{ url_for('admin.admin_user_activity') }}" class="nav-link {% if request.endpoint == 'admin.admin_user_activity' %}active{% endif %}">
+                <i class="bi bi-journal-text"></i>
+                <span>Журнал дій</span>
+            </a>
+            
+            {# Видалено посилання на налаштування Telegram #}
+            {% endif %}
+            {% endif %}
+        </div>
+        
+        <div class="sidebar-footer">
+            {% if current_user.is_authenticated %}
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="text-white-50 small">{{ current_user.username }}</span>
+                <a href="{{ url_for('toggle_theme') }}" class="nav-link p-0">
+                    {% if request.cookies.get('theme') == 'dark' %}
+                        <i class="bi bi-sun"></i>
+                    {% else %}
+                        <i class="bi bi-moon"></i>
+                    {% endif %}
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav me-auto">
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('index') }}">Головна</a>
-                        </li>
-                        {% if current_user.is_authenticated %}
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('devices.devices') }}">Пристрої</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ url_for('employees.employees') }}">Співробітники</a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                    <ul class="navbar-nav ms-auto">
-                        {% if current_user.is_authenticated %}
-                            {% if current_user.is_admin %}
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    Адміністрування
-                                </a>
-                                <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_dashboard') }}">Дашборд</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_users') }}">Користувачі</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_cities') }}">Міста</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin.admin_user_activity') }}">Журнал дій</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('devices.import_excel') }}">Імпорт пристроїв</a></li>
-                                    <li><hr class="dropdown-divider"></li>
-
-                                </ul>
-                            </li>
-                            {% endif %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('toggle_theme') }}">
-                                    {% if request.cookies.get('theme') == 'dark' %}
-                                        <i class="bi bi-sun navbar-theme-icon"></i>
-                                    {% else %}
-                                        <i class="bi bi-moon navbar-theme-icon"></i>
-                                    {% endif %}
-                                </a>
-                            </li>
-                            <li class="nav-item" id="pwa-install-container" style="display: none;">
-                                <a class="nav-link" href="#" id="pwa-install-button">
-                                    <i class="bi bi-download"></i> Встановити додаток
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="#">{{ current_user.username }}</a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('auth.logout') }}">Вихід</a>
-                            </li>
-                        {% else %}
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('toggle_theme') }}">
-                                    {% if request.cookies.get('theme') == 'dark' %}
-                                        <i class="bi bi-sun navbar-theme-icon"></i>
-                                    {% else %}
-                                        <i class="bi bi-moon navbar-theme-icon"></i>
-                                    {% endif %}
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link" href="{{ url_for('auth.login') }}">Вхід</a>
-                            </li>
-                        {% endif %}
-                    </ul>
-                </div>
             </div>
-        </nav>
-    </header>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Вихід</span>
+            </a>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="nav-link">
+                <i class="bi bi-box-arrow-in-right"></i>
+                <span>Вхід</span>
+            </a>
+            {% endif %}
+        </div>
+    </nav>
     
-    <main class="container mb-4">
+    <!-- Кнопка перемикання бічної панелі для мобільних -->
+    <button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+        <i class="bi bi-list"></i>
+    </button>
+    
+    <!-- Основний контент -->
+    <div class="main-content">
+        <div class="top-bar">
+            <h4 class="mb-0">{% block page_title %}Інвентаризація обладнання{% endblock %}</h4>
+            <div class="d-flex align-items-center gap-3">
+                {% if current_user.is_authenticated %}
+                <span class="text-muted">{{ current_user.username }}</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="content-wrapper">
+            <main class="container-fluid mb-4">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
                 {% for message in messages %}
@@ -853,22 +1016,29 @@
         {% endwith %}
         
         {% block content %}{% endblock %}
-    </main>
-    
-    <footer class="bg-dark text-light py-3 mt-auto">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-6">
-                    <p class="mb-0">&copy; 2025 Система інвентаризації</p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <p class="mb-0">Версія 1.0</p>
-                </div>
-            </div>
+            </main>
         </div>
-    </footer>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('show');
+        }
+        
+        // Закриваємо бічну панель при кліку поза нею на мобільних
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(event.target) && !toggle.contains(event.target)) {
+                    sidebar.classList.remove('show');
+                }
+            }
+        });
+    </script>
     
     <!-- Скрипт для мобільного прокручування -->
     <script>

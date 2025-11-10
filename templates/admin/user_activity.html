@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "admin/base.html" %}
 
 {% block content %}
 <h2>Журнал дій користувачів</h2>
@@ -24,7 +24,7 @@
                 <tbody>
                     {% for activity in activities.items %}
                     <tr>
-                        <td>{{ activity.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                        <td>{{ activity.timestamp | local_time('%d.%m.%Y %H:%M:%S') }}</td>
                         <td>
                             <span class="badge {% if activity.user.is_admin %}bg-danger{% else %}bg-secondary{% endif %}">
                                 {{ activity.user.username }}

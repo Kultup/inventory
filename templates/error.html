@@ -4,18 +4,41 @@
 <div class="container mt-5">
     <div class="card border-danger">
         <div class="card-header bg-danger text-white">
-            <h3>{{ error_title|default('Помилка') }}</h3>
+            <h3>{{ error_title|default('Помилка') }} ({{ error_code|default('Помилка') }})</h3>
         </div>
         <div class="card-body">
             <div class="alert alert-danger">
                 <p>{{ error_message|default('Сталася помилка. Будь ласка, спробуйте ще раз.') }}</p>
             </div>
+            {% if error_code == 404 %}
+            <p>Можливі причини:</p>
+            <ul>
+                <li>Сторінка була переміщена або видалена</li>
+                <li>Невірний URL адреса</li>
+                <li>Посилання застаріло</li>
+            </ul>
+            {% elif error_code == 403 %}
+            <p>Можливі причини:</p>
+            <ul>
+                <li>У вас немає прав доступу до цього ресурсу</li>
+                <li>Потрібні права адміністратора</li>
+                <li>Ресурс доступний тільки для певних користувачів</li>
+            </ul>
+            {% elif error_code == 500 %}
+            <p>Можливі причини:</p>
+            <ul>
+                <li>Тимчасова несправність сервера</li>
+                <li>Проблема з базою даних</li>
+                <li>Внутрішня помилка обробки</li>
+            </ul>
+            {% else %}
             <p>Можливі причини:</p>
             <ul>
                 <li>Закінчився час сесії</li>
                 <li>Ви відкрили сторінку в новій вкладці</li>
                 <li>Ви використали кнопку "Назад" в браузері</li>
             </ul>
+            {% endif %}
             <div class="mt-4">
                 <a href="{{ url_for('index') }}" class="btn btn-primary">На головну</a>
                 <button onclick="history.back()" class="btn btn-secondary">Назад</button>

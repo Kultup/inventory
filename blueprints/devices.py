@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash,
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
 from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload, selectinload
 import os
 import uuid
 import io
@@ -10,12 +11,15 @@ from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from datetime import datetime, date
 import qrcode
 from PIL import Image
+import pytz
 
 # Імпорти моделей та функцій
 from models import Device, DevicePhoto, DeviceHistory, City, User, db, RepairExpense
-from utils import allowed_file, record_device_history, generate_inventory_number, log_user_activity, optimize_image
+from utils import allowed_file, record_device_history, generate_inventory_number, log_user_activity, optimize_image, send_test_device_notification
 
 devices_bp = Blueprint('devices', __name__)
+
+# Rate limiting та кешування отримуються через current_app.extensions під час виконання
 
 @devices_bp.route('/devices')
 @login_required
@@ -32,15 +36,42 @@ def devices():
     sort_by = request.args.get('sort', 'created_at')
     sort_order = request.args.get('order', 'desc')
     
-    # Базовий запит
+    # Базовий запит з eager loading для city
+    # Кешуємо список міст (TTL 1 година)
+    cache_key = f'cities_{current_user.id if not current_user.is_admin else "all"}'
+    try:
+        cache_obj = current_app.extensions.get('cache')
+        # Перевіряємо, чи це об'єкт Cache (має метод set)
+        if cache_obj and hasattr(cache_obj, 'set'):
+            cities = cache_obj.get(cache_key)
+            if cities is None:
+                if current_user.is_admin:
+                    cities = City.query.all()
+                else:
+                    cities = [current_user.city]
+                cache_obj.set(cache_key, cities, timeout=3600)  # 1 година
+            else:
+                # Дані з кешу
+                pass
+        else:
+            # Кеш не доступний, отримуємо дані без кешування
+            if current_user.is_admin:
+                cities = City.query.all()
+            else:
+                cities = [current_user.city]
+    except (KeyError, AttributeError, TypeError):
+        # Якщо кеш не доступний, просто отримуємо дані без кешування
+        if current_user.is_admin:
+            cities = City.query.all()
+        else:
+            cities = [current_user.city]
+    
     if current_user.is_admin:
-        cities = City.query.all()
-        query = Device.query
+        query = Device.query.options(joinedload(Device.city))
         if selected_city_id:
             query = query.filter_by(city_id=selected_city_id)
     else:
-        cities = [current_user.city]
-        query = Device.query.filter_by(city_id=current_user.city_id)
+        query = Device.query.options(joinedload(Device.city)).filter_by(city_id=current_user.city_id)
         selected_city_id = current_user.city_id
     
     # Розширений пошук по всіх полях
@@ -137,6 +168,26 @@ def add_device():
                 last_maintenance_date = None
         else:
             last_maintenance_date = None
+        
+        # Отримуємо фінансову інформацію
+        purchase_price = request.form.get('purchase_price')
+        purchase_date = request.form.get('purchase_date')
+        
+        if purchase_price:
+            try:
+                purchase_price = float(purchase_price)
+            except (ValueError, TypeError):
+                purchase_price = None
+        else:
+            purchase_price = None
+        
+        if purchase_date:
+            try:
+                purchase_date = datetime.strptime(purchase_date, '%Y-%m-%d').date()
+            except ValueError:
+                purchase_date = None
+        else:
+            purchase_date = None
             
         device = Device(
             name=request.form['name'],
@@ -148,7 +199,9 @@ def add_device():
             notes=request.form['notes'],
             city_id=city_id,
             last_maintenance=last_maintenance_date,
-            maintenance_interval=maintenance_interval
+            maintenance_interval=maintenance_interval,
+            purchase_price=purchase_price,
+            purchase_date=purchase_date
         )
         
         # Оновлюємо дату наступного обслуговування
@@ -203,13 +256,22 @@ def add_device():
 @devices_bp.route('/device/<int:device_id>')
 @login_required
 def device_detail(device_id):
-    device = Device.query.get_or_404(device_id)
+    device = Device.query.options(
+        joinedload(Device.city),
+        selectinload(Device.photos),
+        selectinload(Device.repair_expenses)
+    ).get_or_404(device_id)
     
     # Перевіряємо, чи має користувач доступ до цього пристрою
     if not current_user.is_admin and device.city_id != current_user.city_id:
         abort(403)
         
     return render_template('device_detail.html', device=device, now=date.today())
+
+@devices_bp.route('/device/<int:device_id>/test-notification', methods=['POST'])
+@login_required
+def test_device_notification(device_id):
+    abort(404)
 
 @devices_bp.route('/device/<int:device_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -296,11 +358,6 @@ def edit_device(device_id):
                 record_device_history(device.id, current_user.id, 'update', 'Дата покупки', old_value, "Не вказано")
                 device.purchase_date = None
         
-        depreciation_rate = request.form.get('depreciation_rate', type=float)
-        if depreciation_rate != device.depreciation_rate:
-            old_value = str(device.depreciation_rate) if device.depreciation_rate else "20.0"
-            record_device_history(device.id, current_user.id, 'update', 'Відсоток амортизації', old_value, str(depreciation_rate))
-            device.depreciation_rate = depreciation_rate
         
         db.session.commit()
         flash('Пристрій успішно оновлено!')
@@ -346,6 +403,7 @@ def delete_device(device_id):
 @devices_bp.route('/device/<int:device_id>/add_photo', methods=['POST'])
 @login_required
 def add_device_photo(device_id):
+    # Rate limiting застосовується через глобальні обмеження в app.py
     device = Device.query.get_or_404(device_id)
     
     # Перевіряємо, чи має користувач доступ до цього пристрою
@@ -1028,3 +1086,13 @@ def bulk_print_inventory():
         cities = [current_user.city]
     
     return render_template('bulk_print_select.html', devices=devices, cities=cities)
+
+@devices_bp.route('/maintenance-pending')
+@login_required
+def maintenance_pending():
+    abort(404)
+
+@devices_bp.route('/maintenance/confirm/<int:device_id>', methods=['POST'])
+@login_required
+def confirm_maintenance(device_id):
+    abort(404)

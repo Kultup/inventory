@@ -40,16 +40,6 @@
                         <div id="resultText"></div>
                     </div>
 
-                    <!-- Інформація -->
-                    <div class="alert alert-light">
-                        <h6><i class="bi bi-info-circle"></i> Як використовувати:</h6>
-                        <ol class="mb-0">
-                            <li>Натисніть "Запустити камеру"</li>
-                            <li>Дозвольте доступ до камери</li>
-                            <li>Наведіть камеру на QR-код пристрою</li>
-                            <li>Після сканування ви будете перенаправлені на картку пристрою</li>
-                        </ol>
-                    </div>
                 </div>
             </div>
 
@@ -83,6 +73,7 @@
 <script>
 let html5QrCode;
 let currentCameraId;
+let isScanning = false;
 
 const startButton = document.getElementById('startButton');
 const stopButton = document.getElementById('stopButton');
@@ -128,15 +119,78 @@ function onScanError(errorMessage) {
     // console.log(errorMessage);
 }
 
+// Перевірка підтримки камери
+function checkCameraSupport() {
+    const isSecure = window.location.protocol === 'https:' || 
+                     window.location.hostname === 'localhost' || 
+                     window.location.hostname === '127.0.0.1';
+    
+    if (!isSecure) {
+        return {
+            supported: false,
+            error: 'Для роботи камери потрібен HTTPS або доступ через localhost/127.0.0.1. ' +
+                   'Поточний протокол: ' + window.location.protocol + '. ' +
+                   'Будь ласка, використовуйте HTTPS або відкрийте сайт через localhost.'
+        };
+    }
+    
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        return {
+            supported: false,
+            error: 'Ваш браузер не підтримує доступ до камери. Спробуйте інший браузер.'
+        };
+    }
+    
+    return { supported: true };
+}
+
 // Запуск сканера
 async function startScanning() {
+    if (isScanning) {
+        return;
+    }
+    
+    // Перевіряємо підтримку камери
+    const cameraCheck = checkCameraSupport();
+    if (!cameraCheck.supported) {
+        resultText.innerHTML = `<div class="alert alert-danger">
+            <strong>Помилка:</strong> ${cameraCheck.error}<br>
+            <small>Для роботи камери на мобільних пристроях потрібен HTTPS.</small>
+        </div>`;
+        result.style.display = 'block';
+        return;
+    }
+    
     try {
+        // Показуємо індикацію завантаження
+        startButton.disabled = true;
+        startButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Завантаження...';
+        
         if (!html5QrCode) {
             html5QrCode = new Html5Qrcode("reader");
         }
         
         // Отримуємо список камер
-        const devices = await Html5Qrcode.getCameras();
+        let devices;
+        try {
+            devices = await Html5Qrcode.getCameras();
+        } catch (err) {
+            console.error('Помилка отримання камер:', err);
+            
+            // Детальна обробка помилок
+            let errorMessage = 'Не вдалося отримати доступ до камери. ';
+            if (err.name === 'NotAllowedError') {
+                errorMessage += 'Дозвіл на використання камери було відхилено. Перевірте налаштування браузера.';
+            } else if (err.name === 'NotFoundError') {
+                errorMessage += 'Камеру не знайдено. Перевірте, чи підключена камера.';
+            } else if (err.name === 'NotReadableError') {
+                errorMessage += 'Камера зайнята іншим додатком. Закрийте інші програми, які використовують камеру.';
+            } else {
+                errorMessage += 'Помилка: ' + err.message;
+            }
+            
+            throw new Error(errorMessage);
+        }
         
         if (devices && devices.length) {
             // Заповнюємо список камер
@@ -154,51 +208,112 @@ async function startScanning() {
             }
             
             // Використовуємо задню камеру за замовчуванням (для мобільних)
-            const backCamera = devices.find(d => d.label.toLowerCase().includes('back')) || devices[0];
+            // Шукаємо камеру з "back", "rear", "environment" в назві
+            const backCamera = devices.find(d => {
+                const label = d.label.toLowerCase();
+                return label.includes('back') || label.includes('rear') || label.includes('environment');
+            }) || devices[devices.length - 1]; // Якщо не знайдено, беремо останню (зазвичай задню)
+            
             currentCameraId = backCamera.id;
             cameraSelect.value = currentCameraId;
             
-            // Запускаємо сканування
-            await html5QrCode.start(
-                currentCameraId,
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 }
-                },
-                onScanSuccess,
-                onScanError
-            );
+            // Визначаємо розмір qrbox в залежності від розміру екрану
+            const isMobile = window.innerWidth <= 768;
+            const qrboxSize = isMobile ? Math.min(250, window.innerWidth * 0.8) : 250;
             
+            // Запускаємо сканування з покращеними налаштуваннями для мобільних
+            try {
+                await html5QrCode.start(
+                    currentCameraId,
+                    {
+                        fps: 10,
+                        qrbox: function(viewfinderWidth, viewfinderHeight) {
+                            // Адаптивний розмір qrbox
+                            const minEdgePercentage = 0.7;
+                            const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
+                            const qrboxSize = Math.floor(minEdgeSize * minEdgePercentage);
+                            return {
+                                width: qrboxSize,
+                                height: qrboxSize
+                            };
+                        },
+                        aspectRatio: 1.0,
+                        videoConstraints: {
+                            facingMode: "environment", // Задня камера на мобільних
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        }
+                    },
+                    onScanSuccess,
+                    onScanError
+                );
+            } catch (startErr) {
+                console.error('Помилка запуску сканера:', startErr);
+                throw new Error('Не вдалося запустити камеру. Перевірте дозволи браузера та налаштування.');
+            }
+            
+            isScanning = true;
             reader.style.display = 'block';
             startButton.style.display = 'none';
             stopButton.style.display = 'inline-block';
             result.style.display = 'none';
         } else {
-            alert('Камеру не знайдено. Перевірте дозволи браузера.');
+            throw new Error('Камеру не знайдено. Перевірте дозволи браузера.');
         }
     } catch (err) {
         console.error('Помилка запуску камери:', err);
-        alert(`Помилка: ${err}. Надайте дозвіл на використання камери.`);
+        isScanning = false;
+        startButton.disabled = false;
+        startButton.innerHTML = '<i class="bi bi-camera"></i> Запустити камеру';
+        
+        let errorMsg = 'Помилка запуску камери. ';
+        if (err.message) {
+            errorMsg += err.message;
+        } else {
+            errorMsg += 'Переконайтеся, що ви надали дозвіл на використання камери.';
+        }
+        
+        // Показуємо детальну помилку
+        resultText.innerHTML = `<div class="alert alert-danger">
+            <strong>Помилка:</strong> ${errorMsg}<br>
+            <small>Перевірте налаштування браузера та дозволи для камери.</small>
+        </div>`;
+        result.style.display = 'block';
     }
 }
 
 // Зупинка сканера
 async function stopScanning() {
-    if (html5QrCode && html5QrCode.isScanning) {
-        try {
+    if (!isScanning) {
+        return;
+    }
+    
+    try {
+        if (html5QrCode) {
             await html5QrCode.stop();
-            reader.style.display = 'none';
-            startButton.style.display = 'inline-block';
-            stopButton.style.display = 'none';
-        } catch (err) {
-            console.error('Помилка зупинки камери:', err);
+            await html5QrCode.clear();
         }
+        isScanning = false;
+        reader.style.display = 'none';
+        startButton.style.display = 'inline-block';
+        startButton.disabled = false;
+        startButton.innerHTML = '<i class="bi bi-camera"></i> Запустити камеру';
+        stopButton.style.display = 'none';
+        cameraSelectDiv.style.display = 'none';
+    } catch (err) {
+        console.error('Помилка зупинки камери:', err);
+        isScanning = false;
+        reader.style.display = 'none';
+        startButton.style.display = 'inline-block';
+        startButton.disabled = false;
+        startButton.innerHTML = '<i class="bi bi-camera"></i> Запустити камеру';
+        stopButton.style.display = 'none';
     }
 }
 
 // Зміна камери
 cameraSelect.addEventListener('change', async function() {
-    if (html5QrCode && html5QrCode.isScanning) {
+    if (isScanning && html5QrCode) {
         await stopScanning();
         currentCameraId = this.value;
         await startScanning();

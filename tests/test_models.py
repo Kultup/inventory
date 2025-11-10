@@ -1,5 +1,11 @@
 import unittest
+import sys
+import os
 from datetime import datetime, date, timedelta
+
+# Додаємо кореневий каталог проєкту до PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import app
 from models import db, User, City, Device, DeviceHistory, Notification
 from werkzeug.security import generate_password_hash

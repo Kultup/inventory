@@ -10,6 +10,7 @@ auth_bp = Blueprint('auth', __name__)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    # Rate limiting застосовується через глобальні обмеження в app.py
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     

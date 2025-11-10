@@ -1,17 +1,21 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, send_file, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, abort, send_file, current_app, jsonify
 from flask_login import login_required, current_user
 from werkzeug.security import generate_password_hash
 from sqlalchemy import func
-from datetime import datetime, timedelta
+from sqlalchemy.orm import joinedload
+from datetime import datetime, timedelta, date
 import os
 import json
 import io
+import pytz
 
 # Імпорти моделей та функцій
 from models import User, City, Device, DeviceHistory, UserActivity, SystemSettings, db
 from utils import admin_required, log_user_activity
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+# Кешування отримується через current_app.extensions під час виконання
 
 @admin_bp.route('/users')
 @login_required
@@ -194,6 +198,18 @@ def admin_delete_city(city_id):
 @login_required
 @admin_required
 def admin_dashboard():
+    # Кешування застосовується через current_app.extensions['cache']
+    cache_key = 'admin_dashboard'
+    try:
+        cache_obj = current_app.extensions.get('cache')
+        # Перевіряємо, чи це об'єкт Cache (має метод set)
+        if cache_obj and hasattr(cache_obj, 'set'):
+            cached_data = cache_obj.get(cache_key)
+            if cached_data:
+                return render_template('admin/dashboard.html', **cached_data)
+    except (KeyError, AttributeError, TypeError):
+        # Якщо кеш не доступний, продовжуємо без кешування
+        pass
     # Загальна статистика
     total_devices = Device.query.count()
     total_users = User.query.count()
@@ -228,15 +244,27 @@ def admin_dashboard():
         devices_by_month.append((month_name, count))
     devices_by_month.reverse()
     
-    return render_template('admin/dashboard.html', 
-                           total_devices=total_devices,
-                           total_users=total_users,
-                           total_cities=total_cities,
-                           devices_by_city=devices_by_city,
-                           devices_by_type=devices_by_type,
-                           devices_by_status=devices_by_status,
-                           new_devices_count=new_devices_count,
-                           devices_by_month=devices_by_month)
+    # Зберігаємо дані в кеш
+    dashboard_data = {
+        'total_devices': total_devices,
+        'total_users': total_users,
+        'total_cities': total_cities,
+        'devices_by_city': devices_by_city,
+        'devices_by_type': devices_by_type,
+        'devices_by_status': devices_by_status,
+        'new_devices_count': new_devices_count,
+        'devices_by_month': devices_by_month
+    }
+    try:
+        cache_obj = current_app.extensions.get('cache')
+        # Перевіряємо, чи це об'єкт Cache (має метод set)
+        if cache_obj and hasattr(cache_obj, 'set'):
+            cache_obj.set(cache_key, dashboard_data, timeout=300)  # 5 хвилин
+    except (KeyError, AttributeError, TypeError):
+        # Якщо кеш не доступний, просто продовжуємо без кешування
+        pass
+    
+    return render_template('admin/dashboard.html', **dashboard_data)
 
 @admin_bp.route('/user-activity')
 @login_required
@@ -251,7 +279,7 @@ def admin_user_activity():
     
     return render_template('admin/user_activity.html', activities=activities)
 
-
+# Видалено маршрути та логіку, пов'язані з Telegram-ботом
 
 @admin_bp.route('/settings/export')
 @login_required
@@ -439,3 +467,15 @@ def api_chart_devices_by_city():
         'labels': [c[0] for c in cities],
         'data': [c[1] for c in cities]
     })
+
+@admin_bp.route('/maintenance-pending')
+@login_required
+@admin_required
+def admin_maintenance_pending():
+    abort(404)
+
+@admin_bp.route('/maintenance/confirm/<int:device_id>', methods=['POST'])
+@login_required
+@admin_required
+def admin_confirm_maintenance(device_id):
+    abort(404)

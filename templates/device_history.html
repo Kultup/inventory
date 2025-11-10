@@ -42,7 +42,7 @@
                                 </h6>
                                 <span class="text-muted small">
                                     <i class="bi bi-person"></i> {{ entry.user.username }} &bull;
-                                    <i class="bi bi-clock"></i> {{ entry.timestamp.strftime('%d.%m.%Y %H:%M:%S') }}
+                                    <i class="bi bi-clock"></i> {{ entry.timestamp | local_time('%d.%m.%Y %H:%M:%S') }}
                                 </span>
                             </div>
                             

@@ -3,39 +3,84 @@ from flask_login import login_required, current_user
 from functools import wraps
 import secrets
 from datetime import datetime
+from sqlalchemy.orm import joinedload, selectinload
 
 # Імпорти моделей та функцій
-from models import Device, City, User, DeviceHistory, db
-from utils import generate_inventory_number, record_device_history
+from models import Device, City, User, DeviceHistory, db, ApiToken
+from utils import generate_inventory_number, record_device_history, verify_jwt_token, generate_jwt_token, revoke_jwt_token, refresh_access_token
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
 
-# Простий API key authentication (для production використовувати JWT)
-def api_key_required(f):
-    """Декоратор для перевірки API ключа"""
+# Rate limiting для API отримується через current_app.extensions під час виконання
+
+# JWT автентифікація для API
+def jwt_required(f):
+    """Декоратор для перевірки JWT токена"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        api_key = request.headers.get('X-API-Key')
+        # Перевіряємо заголовок Authorization
+        auth_header = request.headers.get('Authorization')
         
-        if not api_key:
-            return jsonify({'error': 'API key required'}), 401
+        if not auth_header:
+            return jsonify({'error': 'Authorization header required'}), 401
         
-        # Перевіряємо API key в базі (можна зберігати в User моделі)
-        # Поки що використовуємо просту перевірку
-        user = User.query.filter_by(username=api_key).first()
+        # Перевіряємо формат "Bearer <token>"
+        try:
+            auth_type, token = auth_header.split(' ', 1)
+            if auth_type.lower() != 'bearer':
+                return jsonify({'error': 'Invalid authorization type. Use Bearer token'}), 401
+        except ValueError:
+            return jsonify({'error': 'Invalid authorization header format'}), 401
         
-        if not user or not user.is_active:
-            return jsonify({'error': 'Invalid API key'}), 401
+        # Валідуємо токен
+        user = verify_jwt_token(token)
+        
+        if not user:
+            return jsonify({'error': 'Invalid or expired token'}), 401
         
         # Додаємо user до request context
         request.api_user = user
         return f(*args, **kwargs)
     return decorated_function
 
+# Залишаємо старий декоратор для зворотної сумісності (deprecated)
+def api_key_required(f):
+    """Декоратор для перевірки API ключа (deprecated, використовуйте jwt_required)"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Спочатку перевіряємо JWT токен
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            try:
+                auth_type, token = auth_header.split(' ', 1)
+                if auth_type.lower() == 'bearer':
+                    user = verify_jwt_token(token)
+                    if user:
+                        request.api_user = user
+                        return f(*args, **kwargs)
+            except ValueError:
+                pass
+        
+        # Fallback до старого методу (username-based)
+        api_key = request.headers.get('X-API-Key')
+        
+        if not api_key:
+            return jsonify({'error': 'API key or JWT token required'}), 401
+        
+        user = User.query.filter_by(username=api_key).first()
+        
+        if not user or not user.is_active:
+            return jsonify({'error': 'Invalid API key'}), 401
+        
+        request.api_user = user
+        return f(*args, **kwargs)
+    return decorated_function
+
 # GET /api/v1/devices - Список пристроїв
 @api_bp.route('/devices', methods=['GET'])
-@api_key_required
+@jwt_required
 def api_get_devices():
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Отримати список пристроїв"""
     user = request.api_user
     
@@ -49,11 +94,11 @@ def api_get_devices():
     status = request.args.get('status', type=str)
     search = request.args.get('search', type=str)
     
-    # Базовий запит
+    # Базовий запит з eager loading для city
     if user.is_admin:
-        query = Device.query
+        query = Device.query.options(joinedload(Device.city))
     else:
-        query = Device.query.filter_by(city_id=user.city_id)
+        query = Device.query.options(joinedload(Device.city)).filter_by(city_id=user.city_id)
     
     # Застосовуємо фільтри
     if city_id and user.is_admin:
@@ -100,11 +145,12 @@ def api_get_devices():
 
 # GET /api/v1/devices/<id> - Один пристрій
 @api_bp.route('/devices/<int:device_id>', methods=['GET'])
-@api_key_required
+@jwt_required
 def api_get_device(device_id):
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Отримати інформацію про пристрій"""
     user = request.api_user
-    device = Device.query.get_or_404(device_id)
+    device = Device.query.options(joinedload(Device.city)).get_or_404(device_id)
     
     # Перевірка прав доступу
     if not user.is_admin and device.city_id != user.city_id:
@@ -129,8 +175,9 @@ def api_get_device(device_id):
 
 # POST /api/v1/devices - Створити пристрій
 @api_bp.route('/devices', methods=['POST'])
-@api_key_required
+@jwt_required
 def api_create_device():
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Створити новий пристрій"""
     user = request.api_user
     data = request.get_json()
@@ -187,8 +234,9 @@ def api_create_device():
 
 # PUT /api/v1/devices/<id> - Оновити пристрій
 @api_bp.route('/devices/<int:device_id>', methods=['PUT'])
-@api_key_required
+@jwt_required
 def api_update_device(device_id):
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Оновити пристрій"""
     user = request.api_user
     device = Device.query.get_or_404(device_id)
@@ -226,8 +274,9 @@ def api_update_device(device_id):
 
 # DELETE /api/v1/devices/<id> - Видалити пристрій
 @api_bp.route('/devices/<int:device_id>', methods=['DELETE'])
-@api_key_required
+@jwt_required
 def api_delete_device(device_id):
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Видалити пристрій"""
     user = request.api_user
     device = Device.query.get_or_404(device_id)
@@ -246,10 +295,25 @@ def api_delete_device(device_id):
 
 # GET /api/v1/cities - Список міст
 @api_bp.route('/cities', methods=['GET'])
-@api_key_required
+@jwt_required
 def api_get_cities():
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Отримати список міст"""
-    cities = City.query.all()
+    # Кешуємо список міст (TTL 1 година)
+    try:
+        cache_obj = current_app.extensions.get('cache')
+        # Перевіряємо, чи це об'єкт Cache (має метод set)
+        if cache_obj and hasattr(cache_obj, 'set'):
+            cities = cache_obj.get('api_cities')
+            if cities is None:
+                cities = City.query.all()
+                cache_obj.set('api_cities', cities, timeout=3600)  # 1 година
+        else:
+            # Кеш не доступний, отримуємо дані без кешування
+            cities = City.query.all()
+    except (KeyError, AttributeError, TypeError):
+        # Якщо кеш не доступний, просто отримуємо дані без кешування
+        cities = City.query.all()
     
     return jsonify({
         'cities': [{
@@ -261,8 +325,9 @@ def api_get_cities():
 
 # GET /api/v1/stats - Статистика
 @api_bp.route('/stats', methods=['GET'])
-@api_key_required
+@jwt_required
 def api_get_stats():
+    # Rate limiting застосовується через глобальні обмеження в app.py
     """Отримати статистику"""
     user = request.api_user
     
@@ -280,12 +345,182 @@ def api_get_stats():
     
     return jsonify(stats)
 
-# Обробка помилок
+# POST /api/v1/auth/login - Генерація JWT токена
+@api_bp.route('/auth/login', methods=['POST'])
+def api_login():
+    # Rate limiting застосовується через глобальні обмеження в app.py
+    """Генерація JWT токена для API"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    username = data.get('username')
+    password = data.get('password')
+    token_name = data.get('token_name')
+    expires_in_days = data.get('expires_in_days', 30)
+    
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    
+    # Перевіряємо користувача
+    from werkzeug.security import check_password_hash
+    user = User.query.filter_by(username=username).first()
+    
+    if not user or not user.is_active or not check_password_hash(user.password_hash, password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    try:
+        # Генеруємо токен
+        access_token, refresh_token, token_id = generate_jwt_token(
+            user.id,
+            token_name=token_name,
+            expires_in_days=expires_in_days
+        )
+        
+        return jsonify({
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_id': token_id,
+            'expires_in_days': expires_in_days,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'is_admin': user.is_admin
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Помилка при генерації токена: {e}")
+        return jsonify({'error': 'Failed to generate token'}), 500
+
+# POST /api/v1/auth/refresh - Оновлення access token
+@api_bp.route('/auth/refresh', methods=['POST'])
+def api_refresh():
+    # Rate limiting застосовується через глобальні обмеження в app.py
+    """Оновлення access token через refresh token"""
+    data = request.get_json()
+    
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+    
+    refresh_token = data.get('refresh_token')
+    
+    if not refresh_token:
+        return jsonify({'error': 'Refresh token required'}), 400
+    
+    try:
+        new_access_token = refresh_access_token(refresh_token)
+        
+        if not new_access_token:
+            return jsonify({'error': 'Invalid or expired refresh token'}), 401
+        
+        return jsonify({
+            'access_token': new_access_token
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Помилка при оновленні токена: {e}")
+        return jsonify({'error': 'Failed to refresh token'}), 500
+
+# POST /api/v1/auth/revoke - Відкликання токена
+@api_bp.route('/auth/revoke', methods=['POST'])
+@jwt_required
+def api_revoke():
+    # Rate limiting застосовується через глобальні обмеження в app.py
+    """Відкликання JWT токена"""
+    data = request.get_json()
+    user = request.api_user
+    
+    token_id = data.get('token_id')
+    
+    if not token_id:
+        return jsonify({'error': 'Token ID required'}), 400
+    
+    # Перевіряємо, чи токен належить користувачу
+    api_token = ApiToken.query.filter_by(
+        token_id=token_id,
+        user_id=user.id
+    ).first()
+    
+    if not api_token:
+        return jsonify({'error': 'Token not found'}), 404
+    
+    try:
+        if revoke_jwt_token(token_id):
+            return jsonify({'message': 'Token revoked successfully'}), 200
+        else:
+            return jsonify({'error': 'Failed to revoke token'}), 500
+    except Exception as e:
+        current_app.logger.error(f"Помилка при відкликанні токена: {e}")
+        return jsonify({'error': 'Failed to revoke token'}), 500
+
+# GET /api/v1/auth/tokens - Список токенів користувача
+@api_bp.route('/auth/tokens', methods=['GET'])
+@jwt_required
+def api_list_tokens():
+    # Rate limiting застосовується через глобальні обмеження в app.py
+    """Отримати список токенів користувача"""
+    user = request.api_user
+    
+    tokens = ApiToken.query.filter_by(
+        user_id=user.id
+    ).order_by(ApiToken.created_at.desc()).all()
+    
+    return jsonify({
+        'tokens': [{
+            'id': t.id,
+            'token_id': t.token_id,
+            'name': t.name,
+            'is_active': t.is_active,
+            'expires_at': t.expires_at.isoformat() if t.expires_at else None,
+            'last_used_at': t.last_used_at.isoformat() if t.last_used_at else None,
+            'created_at': t.created_at.isoformat() if t.created_at else None
+        } for t in tokens]
+    }), 200
+
+# Обробка помилок API
 @api_bp.errorhandler(404)
 def api_not_found(error):
-    return jsonify({'error': 'Resource not found'}), 404
+    """Обробка помилки 404 для API"""
+    return jsonify({
+        'error': 'Resource not found',
+        'message': 'Запитаний ресурс не знайдено',
+        'status_code': 404
+    }), 404
+
+@api_bp.errorhandler(403)
+def api_forbidden(error):
+    """Обробка помилки 403 для API"""
+    return jsonify({
+        'error': 'Forbidden',
+        'message': 'У вас немає прав доступу до цього ресурсу',
+        'status_code': 403
+    }), 403
 
 @api_bp.errorhandler(500)
 def api_internal_error(error):
-    return jsonify({'error': 'Internal server error'}), 500
+    """Обробка помилки 500 для API"""
+    current_app.logger.error(f'API Server Error: {error}', exc_info=True)
+    return jsonify({
+        'error': 'Internal server error',
+        'message': 'Сталася несподівана помилка на сервері',
+        'status_code': 500
+    }), 500
+
+@api_bp.errorhandler(400)
+def api_bad_request(error):
+    """Обробка помилки 400 для API"""
+    return jsonify({
+        'error': 'Bad request',
+        'message': 'Невірний формат запиту',
+        'status_code': 400
+    }), 400
+
+@api_bp.errorhandler(429)
+def api_rate_limit_exceeded(error):
+    """Обробка помилки 429 для API (rate limit exceeded)"""
+    return jsonify({
+        'error': 'Too many requests',
+        'message': 'Перевищено ліміт запитів. Спробуйте пізніше.',
+        'status_code': 429
+    }), 429
 
