@@ -1,6 +1,6 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify, url_for
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_login import LoginManager, login_required, current_user
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from flask_migrate import Migrate
 from flask_limiter import Limiter
@@ -32,10 +32,14 @@ login_manager.login_view = 'auth.login'
 csrf = CSRFProtect(app)
 
 # Ініціалізація Flask-Limiter для rate limiting
+# Використовуємо налаштування з конфігурації
+rate_limit_per_hour = app.config.get('RATE_LIMIT_PER_HOUR', 3600)
+rate_limit_per_day = app.config.get('RATE_LIMIT_PER_DAY', 20000)
+
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=[f"{rate_limit_per_day} per day", f"{rate_limit_per_hour} per hour"],
     storage_uri=app.config.get('RATELIMIT_STORAGE_URL', 'memory://')
 )
 
@@ -50,8 +54,6 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 if not os.path.exists(app.config['BACKUP_FOLDER']):
     os.makedirs(app.config['BACKUP_FOLDER'])
-
-
 
 # Додаємо фільтр для перетворення переносів рядків у HTML-теги <br>
 @app.template_filter('nl2br')
@@ -94,6 +96,19 @@ def local_time(value, format='%d.%m.%Y %H:%M'):
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
+
+# Middleware для оновлення активності сесії
+@app.before_request
+def update_session_activity():
+    """Оновлює активність сесії при кожному запиті"""
+    from flask_login import current_user
+    from flask import session as flask_session
+    from utils import update_session_activity
+    
+    if current_user.is_authenticated:
+        session_id = flask_session.get('_id', flask_session.sid if hasattr(flask_session, 'sid') else None)
+        if session_id:
+            update_session_activity(str(session_id))
 
 # Context processor для підрахунку прострочених пристроїв
 @app.context_processor
@@ -164,15 +179,113 @@ def index():
     return render_template('index.html', **stats)
 
 # Маршрут для перемикання теми
-@app.route('/toggle-theme')
-def toggle_theme():
-    from flask import redirect, request, make_response
-    current_theme = request.cookies.get('theme', 'light')
-    new_theme = 'dark' if current_theme == 'light' else 'light'
+@app.route('/api/search')
+@login_required
+def search():
+    """API endpoint для пошуку всіх сутностей в системі: пристроїв, співробітників, міст, користувачів"""
+    query = request.args.get('q', '').strip()
+    limit = request.args.get('limit', 5, type=int)
     
-    response = make_response(redirect(request.referrer or '/'))
-    response.set_cookie('theme', new_theme, max_age=365*24*60*60)  # Зберігаємо на рік
-    return response
+    if not query or len(query) < 2:
+        return jsonify({
+            'devices': [],
+            'employees': [],
+            'cities': [],
+            'users': []
+        })
+    
+    results = {
+        'devices': [],
+        'employees': [],
+        'cities': [],
+        'users': []
+    }
+    
+    # Пошук пристроїв
+    from models import Device
+    from sqlalchemy import or_
+    
+    if current_user.is_admin:
+        device_query = Device.query
+    else:
+        device_query = Device.query.filter_by(city_id=current_user.city_id)
+    
+    device_query = device_query.filter(
+        or_(
+            Device.name.ilike(f'%{query}%'),
+            Device.type.ilike(f'%{query}%'),
+            Device.serial_number.ilike(f'%{query}%'),
+            Device.inventory_number.ilike(f'%{query}%'),
+            Device.location.ilike(f'%{query}%')
+        )
+    ).limit(limit)
+    
+    devices = device_query.all()
+    results['devices'] = [{
+        'id': d.id,
+        'name': d.name,
+        'type': d.type,
+        'serial_number': d.serial_number,
+        'inventory_number': d.inventory_number,
+        'url': url_for('devices.device_detail', device_id=d.id)
+    } for d in devices]
+    
+    # Пошук співробітників (тільки для адмінів)
+    if current_user.is_admin:
+        from models import Employee
+        
+        employee_query = Employee.query.filter(
+            or_(
+                Employee.first_name.ilike(f'%{query}%'),
+                Employee.last_name.ilike(f'%{query}%'),
+                Employee.middle_name.ilike(f'%{query}%'),
+                Employee.position.ilike(f'%{query}%'),
+                Employee.department.ilike(f'%{query}%')
+            )
+        ).limit(limit)
+        
+        employees = employee_query.all()
+        results['employees'] = [{
+            'id': e.id,
+            'name': f'{e.last_name} {e.first_name} {e.middle_name or ""}'.strip(),
+            'position': e.position or '',
+            'url': url_for('employees.employee_detail', employee_id=e.id)
+        } for e in employees]
+        
+        # Пошук міст (тільки для адмінів)
+        from models import City
+        
+        city_query = City.query.filter(
+            City.name.ilike(f'%{query}%')
+        ).limit(limit)
+        
+        cities = city_query.all()
+        results['cities'] = [{
+            'id': c.id,
+            'name': c.name,
+            'url': url_for('admin.admin_cities')
+        } for c in cities]
+        
+        # Пошук користувачів (тільки для адмінів)
+        from models import User
+        
+        user_query = User.query.filter(
+            or_(
+                User.username.ilike(f'%{query}%')
+            )
+        ).limit(limit)
+        
+        users = user_query.all()
+        results['users'] = [{
+            'id': u.id,
+            'name': u.username,
+            'is_admin': u.is_admin,
+            'is_active': u.is_active,
+            'url': url_for('admin.admin_edit_user', user_id=u.id)
+        } for u in users]
+    
+    return jsonify(results)
+
 
 # Функція для створення адміністратора
 def create_admin():
@@ -193,7 +306,8 @@ def create_admin():
             username='admin',
             password_hash=generate_password_hash('admin'),
             is_admin=True,
-            city_id=default_city.id
+            city_id=default_city.id,
+            must_change_password=True  # Обов'язкова зміна пароля при першому вході
         )
         db.session.add(admin)
         db.session.commit()
@@ -203,7 +317,6 @@ def create_admin():
 def init_scheduler():
     """Ініціалізує планувальник для автоматичних задач"""
     from utils import backup_database, cleanup_old_backups
-    from reminder_service import ReminderService
     
     scheduler = BackgroundScheduler()
     
@@ -240,41 +353,58 @@ def init_scheduler():
             replace_existing=True
         )
     
-    # Перевірка обслуговування та незаповнених даних (Telegram-бoт)
-    import pytz
-    kyiv_tz = pytz.timezone('Europe/Kyiv')
+    # Очищення прострочених сесій кожні 30 хвилин
+    from utils import cleanup_expired_sessions, cleanup_expired_blacklist
     
-    # Вимкнено за замовчуванням: не створюємо задачі Telegram-нагадувань
-    # Увімкнути можна, встановивши TELEGRAM_REMINDERS_ENABLED=True у конфігурації
-    if app.config.get('TELEGRAM_REMINDERS_ENABLED', False):
-        # Обгорткові функції для роботи з контекстом Flask
-        def check_maintenance_with_context():
-            """Обгортка для перевірки обслуговування з контекстом Flask"""
-            with app.app_context():
-                ReminderService.check_maintenance_reminders()
-        
-        def check_incomplete_data_with_context():
-            """Обгортка для перевірки незаповнених даних з контекстом Flask"""
-            with app.app_context():
-                ReminderService.check_incomplete_data_reminders()
-        
-        scheduler.add_job(
-            func=check_maintenance_with_context,
-            trigger=CronTrigger(hour=16, minute=51, timezone=kyiv_tz),
-            id='check_maintenance',
-            name='Перевірка обслуговування пристроїв (за 3 дні)',
-            replace_existing=True
-        )
-        
-        scheduler.add_job(
-            func=check_incomplete_data_with_context,
-            trigger=CronTrigger(hour=16, minute=51, timezone=kyiv_tz),
-            id='check_incomplete_data',
-            name='Перевірка незаповнених даних (щодня)',
-            replace_existing=True
-        )
-    else:
-        print("Telegram-нагадування вимкнено (TELEGRAM_REMINDERS_ENABLED=False). Задачі не створюються.")
+    def cleanup_sessions_with_context():
+        """Обгортка для очищення сесій з контекстом Flask"""
+        with app.app_context():
+            count = cleanup_expired_sessions(inactivity_timeout_minutes=30)
+            if count > 0:
+                app.logger.info(f"Очищено {count} прострочених сесій")
+    
+    scheduler.add_job(
+        func=cleanup_sessions_with_context,
+        trigger=CronTrigger(minute='*/30'),  # Кожні 30 хвилин
+        id='cleanup_expired_sessions',
+        name='Очищення прострочених сесій',
+        replace_existing=True
+    )
+    
+    # Очищення прострочених записів з blacklist щодня о 3:00
+    def cleanup_blacklist_with_context():
+        """Обгортка для очищення blacklist з контекстом Flask"""
+        with app.app_context():
+            count = cleanup_expired_blacklist()
+            if count > 0:
+                app.logger.info(f"Очищено {count} прострочених записів з blacklist")
+    
+    scheduler.add_job(
+        func=cleanup_blacklist_with_context,
+        trigger=CronTrigger(hour=3, minute=0),  # Щодня о 3:00
+        id='cleanup_expired_blacklist',
+        name='Очищення прострочених записів з blacklist',
+        replace_existing=True
+    )
+    
+    # Очищення невикористаних фото щодня о 4:00
+    from utils import cleanup_unused_photos
+    
+    def cleanup_photos_with_context():
+        """Обгортка для очищення фото з контекстом Flask"""
+        with app.app_context():
+            count = cleanup_unused_photos()
+            if count > 0:
+                app.logger.info(f"Очищено {count} невикористаних фото")
+    
+    scheduler.add_job(
+        func=cleanup_photos_with_context,
+        trigger=CronTrigger(hour=4, minute=0),  # Щодня о 4:00
+        id='cleanup_unused_photos',
+        name='Очищення невикористаних фото',
+        replace_existing=True
+    )
+    
     
     scheduler.start()
     print("Планувальник задач запущено")
@@ -285,36 +415,34 @@ def init_scheduler():
 @app.errorhandler(404)
 def not_found_error(error):
     """Обробка помилки 404 - сторінка не знайдена"""
-    return render_template('error.html', 
-                         error_code=404, 
-                         error_title='Сторінка не знайдена',
-                         error_message="Запитана сторінка не існує. Перевірте правильність URL."), 404
+    return render_template('error_404.html'), 404
 
 @app.errorhandler(403)
 def forbidden_error(error):
     """Обробка помилки 403 - доступ заборонено"""
-    return render_template('error.html', 
-                         error_code=403, 
-                         error_title='Доступ заборонено',
-                         error_message="У вас немає прав доступу до цього ресурсу."), 403
+    return render_template('error_403.html'), 403
 
 @app.errorhandler(500)
 def internal_error(error):
     """Обробка помилки 500 - внутрішня помилка сервера"""
     from flask import current_app
     current_app.logger.error(f'Server Error: {error}', exc_info=True)
-    return render_template('error.html', 
-                         error_code=500, 
-                         error_title='Внутрішня помилка сервера',
-                         error_message="Сталася несподівана помилка. Будь ласка, спробуйте пізніше або зверніться до адміністратора."), 500
+    return render_template('error_500.html'), 500
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):
     """Обробка помилки CSRF"""
-    return render_template('error.html', 
-                         error_code=400, 
+    return render_template('error_400.html', 
                          error_title='Помилка безпеки',
                          error_message="Помилка запиту. Можливо, закінчився час сесії. Спробуйте оновити сторінку."), 400
+
+@app.errorhandler(429)
+def handle_rate_limit(e):
+    """Обробка помилки 429 (Too Many Requests)"""
+    rate_limit_per_hour = app.config.get('RATE_LIMIT_PER_HOUR', 200)
+    return render_template('error_429.html',
+                         error_title='Забагато запитів',
+                         error_message=f"Ви перевищили ліміт запитів. Спробуйте пізніше. Ліміт: {rate_limit_per_hour} запитів на годину."), 429
 
 if __name__ == '__main__':
     with app.app_context():
@@ -330,10 +458,10 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("Сервер запущено!")
     print("="*60)
-    print(f"Локальна адреса: http://127.0.0.1:5000")
-    print(f"Мережева адреса: http://{local_ip}:5000")
+    print(f"Локальна адреса: http://127.0.0.1:8000")
+    print(f"Мережева адреса: http://{local_ip}:8000")
     print("="*60)
     print("Для доступу з інших пристроїв використовуйте мережеву адресу")
     print("="*60 + "\n")
 
-    app.run(debug=True, host='0.0.0.0', port=5000)  # Для розробки
+    app.run(debug=True, host='0.0.0.0', port=8000)  # Для розробки
