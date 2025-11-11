@@ -15,7 +15,8 @@ import pytz
 
 # Імпорти моделей та функцій
 from models import Device, DevicePhoto, DeviceHistory, City, User, db, RepairExpense
-from utils import allowed_file, record_device_history, generate_inventory_number, log_user_activity, optimize_image, send_test_device_notification
+from utils import (allowed_file, record_device_history, generate_inventory_number, log_user_activity, 
+                   optimize_image, generate_thumbnails, convert_to_webp, cleanup_unused_photos)
 
 devices_bp = Blueprint('devices', __name__)
 
@@ -35,6 +36,12 @@ def devices():
     status = request.args.get('status', '').strip()
     sort_by = request.args.get('sort', 'created_at')
     sort_order = request.args.get('order', 'desc')
+    
+    # Розширені фільтри
+    created_from = request.args.get('created_from', '').strip()
+    created_to = request.args.get('created_to', '').strip()
+    price_from = request.args.get('price_from', '').strip()
+    price_to = request.args.get('price_to', '').strip()
     
     # Базовий запит з eager loading для city
     # Кешуємо список міст (TTL 1 година)
@@ -94,6 +101,37 @@ def devices():
     if status:
         query = query.filter(Device.status.ilike(f'%{status}%'))
     
+    # Розширені фільтри
+    if created_from:
+        try:
+            from datetime import datetime
+            created_from_date = datetime.strptime(created_from, '%Y-%m-%d').date()
+            query = query.filter(Device.created_at >= created_from_date)
+        except ValueError:
+            pass
+    
+    if created_to:
+        try:
+            from datetime import datetime
+            created_to_date = datetime.strptime(created_to, '%Y-%m-%d').date()
+            query = query.filter(Device.created_at <= created_to_date)
+        except ValueError:
+            pass
+    
+    if price_from:
+        try:
+            price_from_float = float(price_from)
+            query = query.filter(Device.purchase_price >= price_from_float)
+        except ValueError:
+            pass
+    
+    if price_to:
+        try:
+            price_to_float = float(price_to)
+            query = query.filter(Device.purchase_price <= price_to_float)
+        except ValueError:
+            pass
+    
     # Сортування
     if sort_by in ['name', 'type', 'serial_number', 'inventory_number', 'location', 'status', 'created_at', 'last_maintenance']:
         sort_column = getattr(Device, sort_by)
@@ -128,7 +166,11 @@ def devices():
                           sort_order=sort_order,
                           device_types=[t[0] for t in device_types],
                           device_statuses=[s[0] for s in device_statuses],
-                          per_page=per_page)
+                          per_page=per_page,
+                          created_from=created_from,
+                          created_to=created_to,
+                          price_from=price_from,
+                          price_to=price_to)
 
 @devices_bp.route('/device/add', methods=['GET', 'POST'])
 @login_required
@@ -231,6 +273,13 @@ def add_device():
                     if optimized_path and optimized_path != file_path:
                         # Якщо файл було конвертовано (наприклад PNG->JPG)
                         unique_filename = os.path.basename(optimized_path)
+                        file_path = optimized_path
+                    
+                    # Генеруємо thumbnail'и
+                    thumbnails = generate_thumbnails(file_path)
+                    
+                    # Створюємо WebP версію (якщо браузер підтримує)
+                    webp_path = convert_to_webp(file_path)
                     
                     # Створюємо запис у базі даних
                     device_photo = DevicePhoto(
@@ -426,6 +475,13 @@ def add_device_photo(device_id):
             if optimized_path and optimized_path != file_path:
                 # Якщо файл було конвертовано
                 unique_filename = os.path.basename(optimized_path)
+                file_path = optimized_path
+            
+            # Генеруємо thumbnail'и
+            thumbnails = generate_thumbnails(file_path)
+            
+            # Створюємо WebP версію (якщо браузер підтримує)
+            webp_path = convert_to_webp(file_path)
             
             # Створюємо запис у базі даних
             device_photo = DevicePhoto(
@@ -523,6 +579,29 @@ def uploaded_file(filename):
     # Перевіряємо, чи має користувач доступ до цього пристрою
     if not current_user.is_admin and device.city_id != current_user.city_id:
         abort(403)
+    
+    # Перевіряємо чи потрібен thumbnail
+    size = request.args.get('size', 'original')
+    if size in ['thumb', 'medium', 'large']:
+        # Шукаємо thumbnail
+        base_name = os.path.splitext(filename)[0]
+        ext = os.path.splitext(filename)[1]
+        thumb_filename = f"{base_name}_{size}{ext}"
+        thumb_path = os.path.join(current_app.config['UPLOAD_FOLDER'], thumb_filename)
+        
+        if os.path.exists(thumb_path):
+            return send_from_directory(current_app.config['UPLOAD_FOLDER'], thumb_filename)
+    
+    # Перевіряємо чи браузер підтримує WebP
+    accept_header = request.headers.get('Accept', '')
+    if 'image/webp' in accept_header:
+        # Шукаємо WebP версію
+        base_name = os.path.splitext(filename)[0]
+        webp_filename = f"{base_name}.webp"
+        webp_path = os.path.join(current_app.config['UPLOAD_FOLDER'], webp_filename)
+        
+        if os.path.exists(webp_path):
+            return send_from_directory(current_app.config['UPLOAD_FOLDER'], webp_filename)
         
     return send_from_directory(current_app.config['UPLOAD_FOLDER'], filename)
 
@@ -1087,10 +1166,6 @@ def bulk_print_inventory():
     
     return render_template('bulk_print_select.html', devices=devices, cities=cities)
 
-@devices_bp.route('/maintenance-pending')
-@login_required
-def maintenance_pending():
-    abort(404)
 
 @devices_bp.route('/maintenance/confirm/<int:device_id>', methods=['POST'])
 @login_required
